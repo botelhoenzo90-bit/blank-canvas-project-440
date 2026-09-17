@@ -1,0 +1,19 @@
+:root{--bg:#f4f8f8;--surface:#fff;--surface-2:#f7fbfb;--ink:#101617;--muted:#718083;--line:#e1eaea;--accent:#68d6d0;--accent-strong:#27bdb5;--nav:#101617;--green:#20b486;--red:#e45d69;--blue:#58c8c5}
+body{background:var(--bg);color:var(--ink)}
+.dab-app{background:var(--bg)}
+.dab-sidebar{background:#101617}
+.dab-brand-mark,.tv-logo{background:#68d6d0;color:#101617;box-shadow:0 8px 22px rgba(104,214,208,.22)}
+.dab-brand span,.dab-workspace>span{color:#8c9a9b}
+.dab-workspace button{background:#1c2425;color:#e9eeee}
+.nav-item{color:#98a3a5}.nav-item.active{background:rgba(104,214,208,.13)}.nav-item.active svg{color:#68d6d0}
+.dab-header{background:rgba(255,255,255,.95);border-color:#e1eaea}
+.periods{background:#e5eeee}.primary-btn{background:#68d6d0;border-color:#27bdb5;color:#10201f;box-shadow:0 5px 15px rgba(39,189,181,.16)}.primary-btn:hover{background:#7ce0db}
+.text-btn{color:#168f89}.eyebrow{color:#65d1cb}
+.welcome-strip{background:linear-gradient(110deg,#101617,#202829)}.welcome-strip:after{border-color:rgba(104,214,208,.14)}
+.metric-icon{background:#e9faf8;color:#15958e}.mini-progress i,.bar i,.goal-bar i{background:#68d6d0}
+.goal-panel>.panel-head svg{color:#2abcb4}.goal-ring{background:conic-gradient(#68d6d0 var(--pct),#e8eeee 0)}
+.pos-1{background:#dff7f5;color:#137f7a}.rank-medal{background:#eaf7f6;color:#168e88}
+.filter-btn span{background:#e8faf8;color:#178f89}.notif-icon{background:#e8faf8;color:#15918b}.feed-value{color:#23a98b}
+.avatar{background:#dff7f5;color:#157d79}.team-pill,.goal-tag,.access-tag{background:#edf2f2}
+.tv-shell{background:#0a0d0e}.tv-time{color:#68d6d0}.overlay-badge{color:#62d6d0;background:#102c2c;border-color:#1b4d4b}
+.field input:focus,.field select:focus{border-color:#27bdb5;box-shadow:0 0 0 3px rgba(39,189,181,.1)}
