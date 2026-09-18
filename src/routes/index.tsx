@@ -1,61 +1,217 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  ArrowDownRight,
+  ArrowUpRight,
+  Bell,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  CircleDollarSign,
+  Download,
+  FileSpreadsheet,
+  Filter,
+  LayoutDashboard,
+  Menu,
+  MonitorPlay,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+  Target,
+  Trophy,
+  UserPlus,
+  Users,
+  X,
+  Zap,
+} from "lucide-react";
+import { Toaster, toast } from "sonner";
+
+export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Dábliu | Central de Resultados Comerciais" },
+      { name: "description", content: "Painel de gestão comercial com vendas, metas, rankings, equipes e relatórios." },
+      { property: "og:title", content: "Dábliu | Central de Resultados Comerciais" },
+      { property: "og:description", content: "Painel de gestão comercial com vendas, metas, rankings, equipes e relatórios." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: DabliuApp,
+});
+
+type Role = "Director" | "Master" | "Representative" | "Supervisor" | "Seller";
+type View = "dashboard" | "sales" | "ranking" | "goals" | "team" | "reports" | "tv";
+
+type Sale = {
+  id: number;
+  seller: string;
+  supervisor: string;
+  representative: string;
+  master: string;
+  team: string;
+  value: number;
+  date: string;
+  time: string;
+  status: "Confirmada" | "Pendente";
+};
+
+const seedSales: Sale[] = [
+  { id: 101, seller: "Ana Martins", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 18500, date: "2026-09-17", time: "09:42", status: "Confirmada" },
+  { id: 102, seller: "Bruno Rocha", supervisor: "Juliana Alves", representative: "Marina Costa", master: "Rafael Alves", team: "Time Beta", value: 12400, date: "2026-09-17", time: "09:18", status: "Confirmada" },
+  { id: 103, seller: "Camila Souza", supervisor: "Carlos Lima", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Alpha", value: 9800, date: "2026-09-17", time: "08:56", status: "Confirmada" },
+  { id: 104, seller: "Diego Santos", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 7600, date: "2026-09-16", time: "17:41", status: "Confirmada" },
+  { id: 105, seller: "Fernanda Lima", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 21500, date: "2026-09-16", time: "16:33", status: "Confirmada" },
+  { id: 106, seller: "Gabriel Melo", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 11200, date: "2026-09-16", time: "15:12", status: "Pendente" },
+  { id: 107, seller: "Helena Dias", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 14300, date: "2026-09-15", time: "14:28", status: "Confirmada" },
+  { id: 108, seller: "Igor Reis", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 8900, date: "2026-09-15", time: "13:17", status: "Confirmada" },
+];
+
+const sellers = ["Ana Martins", "Bruno Rocha", "Camila Souza", "Diego Santos", "Fernanda Lima", "Gabriel Melo", "Helena Dias", "Igor Reis"];
+const supervisors = ["Carlos Lima", "Juliana Alves"];
+const representatives = ["Marina Costa", "Pedro Mendes"];
+const masters = ["Rafael Alves"];
+
+const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const initials = (name: string) => name.split(" ").map((x) => x[0]).slice(0, 2).join("");
+
+function DabliuApp() {
+  const [view, setView] = useState<View>("dashboard");
+  const [role, setRole] = useState<Role>("Director");
+  const [sales, setSales] = useState<Sale[]>(seedSales);
+  const [period, setPeriod] = useState("Hoje");
+  const [search, setSearch] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showSaleModal, setShowSaleModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [tvMode, setTvMode] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("dabliu-sales");
+      if (saved) setSales(JSON.parse(saved) as Sale[]);
+    } catch {
+      // Keep the demo data when browser storage is unavailable or invalid.
+    }
+  }, []);
+
+  useEffect(() => { localStorage.setItem("dabliu-sales", JSON.stringify(sales)); }, [sales]);
+
+  useEffect(() => {
+    const channel = "BroadcastChannel" in window ? new BroadcastChannel("dabliu-results") : null;
+    if (!channel) return;
+    channel.onmessage = (event) => {
+      if (event.data?.type === "sale") {
+        setSales((current) => [event.data.sale, ...current.filter((s) => s.id !== event.data.sale.id)]);
+        toast.success("Nova venda registrada", { description: `${event.data.sale.seller} • ${money(event.data.sale.value)}` });
+      }
+    };
+    return () => channel.close();
+  }, []);
+
+  const todaySales = sales.filter((s) => s.date === "2026-09-17");
+  const todayTotal = todaySales.reduce((sum, s) => sum + s.value, 0);
+  const monthTotal = sales.reduce((sum, s) => sum + s.value, 0);
+  const avgTicket = sales.length ? monthTotal / sales.length : 0;
+  const goal = 240000;
+  const goalPct = Math.min(100, Math.round((monthTotal / goal) * 100));
+
+  const registerSale = (sale: Sale) => {
+    setSales((current) => [sale, ...current]);
+    setShowSaleModal(false);
+    toast.success("Venda registrada com sucesso", { description: `${sale.seller} • ${money(sale.value)}` });
+    if ("BroadcastChannel" in window) new BroadcastChannel("dabliu-results").postMessage({ type: "sale", sale });
+  };
+
+  const navigate = (next: View) => { setView(next); setSidebarOpen(false); };
+
+  if (tvMode || view === "tv") {
+    return <TvPanel sales={sales} onExit={() => { setTvMode(false); setView("dashboard"); }} />;
+  }
+
+  return (
+    <div className="dab-app">
+      <aside className={`dab-sidebar ${sidebarOpen ? "open" : ""}`}>
+        <div className="dab-brand"><div className="dab-brand-mark">D</div><div><strong>Dábliu</strong><span>Central de Resultados</span></div></div>
+        <div className="dab-workspace"><span>OPERAÇÃO</span><button><span className="live-dot" /> Operação Principal <ChevronDown size={15} /></button></div>
+        <nav>
+          <NavItem icon={<LayoutDashboard size={18} />} label="Visão geral" active={view === "dashboard"} onClick={() => navigate("dashboard")} />
+          <NavItem icon={<CircleDollarSign size={18} />} label="Vendas" active={view === "sales"} onClick={() => navigate("sales")} />
+          <NavItem icon={<Trophy size={18} />} label="Ranking" active={view === "ranking"} onClick={() => navigate("ranking")} />
+          <NavItem icon={<Target size={18} />} label="Metas" active={view === "goals"} onClick={() => navigate("goals")} />
+          <NavItem icon={<Users size={18} />} label="Equipe" active={view === "team"} onClick={() => navigate("team")} />
+          <NavItem icon={<Activity size={18} />} label="Relatórios" active={view === "reports"} onClick={() => navigate("reports")} />
+          <div className="nav-divider" />
+          <NavItem icon={<MonitorPlay size={18} />} label="Central TV" active={false} onClick={() => { setView("tv"); }} />
+          <NavItem icon={<ShieldCheck size={18} />} label="Permissões" active={false} onClick={() => toast.info("Controle por hierarquia", { description: "Director > Master > Representative > Supervisor > Seller" })} />
+          <NavItem icon={<Settings size={18} />} label="Configurações" active={false} onClick={() => toast.info("Configurações", { description: "Área preparada para regras da operação." })} />
+        </nav>
+        <div className="sidebar-bottom"><div className="mini-profile"><div className="avatar">EA</div><div><strong>Enzo Admin</strong><span>{role}</span></div><MoreHorizontal size={18} /></div></div>
+      </aside>
+
+      <main className="dab-main">
+        <header className="dab-header">
+          <button className="mobile-menu" onClick={() => setSidebarOpen((v) => !v)}><Menu size={22} /></button>
+          <div><div className="breadcrumb">Dábliu <span>/</span> {view === "dashboard" ? "Visão geral" : view}</div><h1>{view === "dashboard" ? "Bom dia, Enzo" : titleFor(view)}</h1></div>
+          <div className="header-actions">
+            <div className="role-select"><ShieldCheck size={15} /><select value={role} onChange={(e) => setRole(e.target.value as Role)}>{["Director", "Master", "Representative", "Supervisor", "Seller"].map((r) => <option key={r}>{r}</option>)}</select></div>
+            <button className="icon-btn" onClick={() => setShowNotifications((v) => !v)}><Bell size={19} /><i>3</i></button>
+            <button className="avatar header-avatar">EA</button>
+          </div>
+          {showNotifications && <div className="notifications"><div className="notif-head"><strong>Notificações</strong><button onClick={() => setShowNotifications(false)}><X size={16} /></button></div><Notification text="Nova venda registrada por Ana Martins" time="agora" /><Notification text="Time Alpha atingiu 78% da meta" time="12 min" /><Notification text="Você subiu para #1 no ranking" time="31 min" /></div>}
+        </header>
+
+        <div className="content">
+          <div className="top-toolbar"><div className="periods">{["Hoje", "7 dias", "30 dias", "Personalizado"].map((p) => <button className={period === p ? "active" : ""} key={p} onClick={() => setPeriod(p)}>{p === "Personalizado" && <CalendarDays size={14} />}{p}</button>)}</div><div className="toolbar-right"><button className="outline-btn" onClick={() => setTvMode(true)}><MonitorPlay size={16} /> Abrir TV</button><button className="primary-btn" onClick={() => setShowSaleModal(true)}><Plus size={17} /> Registrar venda</button></div></div>
+
+          {view === "dashboard" && <Dashboard sales={sales} todayTotal={todayTotal} monthTotal={monthTotal} avgTicket={avgTicket} goalPct={goalPct} />}
+          {view === "sales" && <SalesView sales={sales} search={search} setSearch={setSearch} onAdd={() => setShowSaleModal(true)} />}
+          {view === "ranking" && <RankingView sales={sales} />}
+          {view === "goals" && <GoalsView total={monthTotal} />}
+          {view === "team" && <TeamView sales={sales} role={role} />}
+          {view === "reports" && <ReportsView sales={sales} />}
+        </div>
+      </main>
+
+      {showSaleModal && <SaleModal onClose={() => setShowSaleModal(false)} onSave={registerSale} />}
+      <Toaster position="bottom-right" richColors />
+    </div>
+  );
+}
+
+function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) { return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}>{icon}<span>{label}</span></button>; }
+function Notification({ text, time }: { text: string; time: string }) { return <div className="notification"><div className="notif-icon"><Zap size={14} /></div><div><p>{text}</p><small>{time}</small></div></div>; }
+function titleFor(v: View) { return ({ sales: "Vendas", ranking: "Ranking de performance", goals: "Metas e objetivos", team: "Gestão da equipe", reports: "Relatórios" } as Record<string, string>)[v] || "Central de Resultados"; }
+
+function Dashboard({ sales, todayTotal, monthTotal, avgTicket, goalPct }: { sales: Sale[]; todayTotal: number; monthTotal: number; avgTicket: number; goalPct: number }) {
+  const max = Math.max(...[120, 180, 145, 210, 190, 240, 225], 1);
+  const points = [120, 180, 145, 210, 190, 240, 225];
+  return <>
+    <section className="welcome-strip"><div><span className="eyebrow"><span className="live-dot" /> AO VIVO</span><h2>Central de Resultados</h2><p>Acompanhe a operação comercial em tempo real.</p></div><div className="live-stat"><span>Última atualização</span><strong>agora mesmo</strong></div></section>
+    <section className="metric-grid">
+      <Metric icon={<CircleDollarSign />} label="Vendas hoje" value={money(todayTotal)} delta="18,4%" positive sub="vs. ontem" />
+      <Metric icon={<CalendarDays />} label="Vendas no mês" value={money(monthTotal)} delta="12,8%" positive sub="vs. mês anterior" />
+      <Metric icon={<Activity />} label="Ticket médio" value={money(avgTicket)} delta="6,2%" positive sub="vs. período anterior" />
+      <Metric icon={<Target />} label="Meta atingida" value={`${goalPct}%`} delta="24,0%" positive sub="meta mensal" progress={goalPct} />
+    </section>
+    <section className="dashboard-grid">
+      <div className="panel chart-panel"><div className="panel-head"><div><span className="panel-kicker">PERFORMANCE</span><h3>Evolução das vendas</h3></div><button className="ghost-btn">30 dias <ChevronDown size={14} /></button></div><div className="chart"><div className="y-axis"><span>250k</span><span>200k</span><span>150k</span><span>100k</span><span>50k</span><span>0</span></div><div className="chart-area"><div className="grid-lines" /> <svg viewBox="0 0 700 240" preserveAspectRatio="none"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="rgba(255,159,67,.30)" /><stop offset="100%" stopColor="rgba(255,159,67,0)" /></linearGradient></defs><path d="M0,205 C55,180 75,185 115,145 S180,155 225,110 S290,145 340,95 S405,115 450,70 S510,100 555,52 S625,65 700,30 L700,240 L0,240 Z" fill="url(#fill)"/><path d="M0,205 C55,180 75,185 115,145 S180,155 225,110 S290,145 340,95 S405,115 450,70 S510,100 555,52 S625,65 700,30" fill="none" stroke="var(--accent)" strokeWidth="3" vectorEffect="non-scaling-stroke" /></svg><div className="x-axis">{["01 Set", "05 Set", "10 Set", "15 Set", "17 Set"].map((x) => <span key={x}>{x}</span>)}</div></div></div></div>
+      <div className="panel goal-panel"><div className="panel-head"><div><span className="panel-kicker">OBJETIVO</span><h3>Meta mensal</h3></div><Target size={19} /></div><div className="goal-ring" style={{ "--pct": `${goalPct * 3.6}deg` } as React.CSSProperties}><div><strong>{goalPct}%</strong><span>atingido</span></div></div><div className="goal-numbers"><div><span>Realizado</span><strong>{money(monthTotal)}</strong></div><div><span>Meta</span><strong>{money(240000)}</strong></div><div><span>Faltam</span><strong>{money(Math.max(0, 240000 - monthTotal))}</strong></div></div></div>
+    </section>
+    <section className="dashboard-grid lower"><div className="panel ranking-panel"><div className="panel-head"><div><span className="panel-kicker">DESEMPENHO</span><h3>Ranking de vendedores</h3></div><button className="text-btn">Ver ranking <ArrowUpRight size={14} /></button></div><div className="rank-list">{sellerRanking(sales).slice(0, 5).map((s, i) => <div className="rank-row" key={s.name}><span className={`rank-pos pos-${i + 1}`}>{i + 1}</span><div className="avatar small">{initials(s.name)}</div><div className="rank-name"><strong>{s.name}</strong><span>{s.sales} vendas</span></div><div className="rank-value">{money(s.value)}</div><div className="trend"><ArrowUpRight size={14} />{["24%", "18%", "14%", "9%", "6%"][i]}</div></div>)}</div></div><div className="panel feed-panel"><div className="panel-head"><div><span className="panel-kicker">TEMPO REAL</span><h3>Últimas vendas</h3></div><span className="live-badge"><span className="live-dot" /> LIVE</span></div><div className="sales-feed">{sales.slice(0, 5).map((s) => <div className="feed-row" key={s.id}><div className="feed-avatar">{initials(s.seller)}</div><div><strong>{s.seller}</strong><span>{s.team} • {s.time}</span></div><strong className="feed-value">+{money(s.value)}</strong></div>)}</div></div></section>
+    <section className="panel team-performance"><div className="panel-head"><div><span className="panel-kicker">ESTRUTURA</span><h3>Resultados por equipe</h3></div><button className="ghost-btn">Este mês <ChevronDown size={14} /></button></div><div className="team-bars">{["Time Alpha", "Time Beta", "Time Gamma"].map((t, i) => { const p = [86, 71, 48][i]; return <div className="team-bar" key={t}><div><strong>{t}</strong><span>{money([108400, 89400, 42300][i])}</span></div><div className="bar"><i style={{ width: `${p}%` }} /></div><small>{p}% da meta</small></div>; })}</div></section>
+  </>;
+}
+
+function Metric({ icon, label, value, delta, positive, sub, progress }: { icon: React.ReactNode; label: string; value: string; delta: string; positive: boolean; sub: string; progress?: number }) { return <div className="metric"><div className="metric-top"><div className="metric-icon">{icon}</div><span className={`delta ${positive ? "up" : "down"}`}>{positive ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{delta}</span></div><span className="metric-label">{label}</span><strong className="metric-value">{value}</strong>{progress !== undefined ? <div className="mini-progress"><i style={{ width: `${progress}%` }} /></div> : null}<span className="metric-sub">{sub}</span></div>; }
+
+function sellerRanking(sales: Sale[]) { const map = new Map<string, { name: string; value: number; sales: number }>(); sales.forEach((s) => { const old = map.get(s.seller) || { name: s.seller, value: 0, sales: 0 }; old.value += s.value; old.sales += 1; map.set(s.seller, old); }); return [...map.values()].sort((a, b) => b.value - a.value); }
+
 function SalesView({ sales, search, setSearch, onAdd }: { sales: Sale[]; search: string; setSearch: (v: string) => void; onAdd: () => void }) { const filtered = sales.filter((s) => [s.seller, s.supervisor, s.team].join(" ").toLowerCase().includes(search.toLowerCase())); return <section className="panel full-panel"><div className="panel-head"><div><span className="panel-kicker">OPERAÇÃO COMERCIAL</span><h3>Histórico de vendas</h3></div><button className="primary-btn" onClick={onAdd}><Plus size={16} /> Nova venda</button></div><div className="filters"><div className="search"><Search size={17} /><input placeholder="Buscar vendedor, equipe..." value={search} onChange={(e) => setSearch(e.target.value)} /></div><button className="filter-btn"><Filter size={15} /> Filtros <span>3</span></button><button className="filter-btn">Status <ChevronDown size={14} /></button><button className="filter-btn">Período <ChevronDown size={14} /></button></div><DataTable sales={filtered} /></section>; }
 
-function DataTable({ sales }: { sales: Sale[] }) { return <div className="table-wrap"><table><thead><tr><th>VENDEDOR</th><th>SUPERVISOR</th><th>EQUIPE</th><th>DATA / HORA</th><th>VALOR</th><th>STATUS</th><th /></tr></thead><tbody>{sales.map((s) => <tr key={s.id}><td><div className="person-cell"><div className="avatar small">{initials(s.seller)}</div><strong>{s.seller}</strong></div></td><td>{s.supervisor}</td><td><span className="team-pill">{s.team}</span></td><td>{new Date(`${s.date}T${s.time}`).toLocaleDateString("pt-BR")} <small>{s.time}</small></td><td className="table-value">{money(s.value)}</td><td><span className={`status ${s.status === "Confirmada" ? "confirmed" : "pending"}`}><i />{s.status}</span></td><td><button className="row-more"><MoreHorizontal size={17} /></button></td></tr>)}</tbody></table></div>; }
-
-function RankingView({sales}:{sales:Sale[]}) {
-  const [type,setType]=useState("Vendedores"); const [metric,setMetric]=useState<"Valor"|"Quantidade">("Valor"); const [days,setDays]=useState(30);
-  const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-(days-1));
-  const scoped=sales.filter(s=>new Date(s.date+"T00:00:00")>=cutoff);
-  const raw=type==="Vendedores"?sellerRanking(scoped):type==="Supervisores"?hierarchyRanking(scoped,"supervisor"):type==="Representantes"?hierarchyRanking(scoped,"representative"):hierarchyRanking(scoped,"master");
-  const data=raw.map((x:any)=>({...x,score:metric==="Valor"?x.value:x.sales||scoped.filter(s=>s[type==="Supervisores"?"supervisor":type==="Representantes"?"representative":"master"]===x.name).length})).sort((x:any,y:any)=>y.score-x.score);
-  return <section className="panel full-panel"><div className="ranking-hero"><div><span className="panel-kicker">PERFORMANCE</span><h3>Ranking de performance</h3><p>Atualizado automaticamente conforme novas vendas.</p></div><Trophy size={42}/></div>
-    <div className="rank-tabs">{["Vendedores","Supervisores","Representantes","Masters"].map(x=><button className={type===x?"active":""} key={x} onClick={()=>setType(x)}>{x}</button>)}</div>
-    <div className="rank-tabs"><button className={metric==="Valor"?"active":""} onClick={()=>setMetric("Valor")}>Por valor vendido</button><button className={metric==="Quantidade"?"active":""} onClick={()=>setMetric("Quantidade")}>Por quantidade</button><button className={days===1?"active":""} onClick={()=>setDays(1)}>Hoje</button><button className={days===7?"active":""} onClick={()=>setDays(7)}>7 dias</button><button className={days===30?"active":""} onClick={()=>setDays(30)}>30 dias</button></div>
-    <div className="leaderboard">{data.map((item:any,i:number)=>{const max=Math.max(...data.map((x:any)=>x.score),1);return <div className="leader-row" key={item.name}><div className={`leader-place place-${i+1}`}>{i+1}</div><div className="avatar">{initials(item.name)}</div><div className="leader-person"><strong>{item.name}</strong><span>{item.sales?item.sales+" vendas":"Estrutura comercial"}</span></div><div className="leader-bar"><i style={{width:`${Math.max(8,item.score/max*100)}%`}}/></div><strong className="leader-money">{metric==="Valor"?money(item.score):`${item.score} vendas`}</strong></div>})}</div>
-  </section>;
-}
-function hierarchyRanking(sales: Sale[], key: keyof Sale) { const map = new Map<string, { name: string; value: number }>(); sales.forEach((s) => { const name = String(s[key]); const old = map.get(name) || { name, value: 0 }; old.value += s.value; map.set(name, old); }); return [...map.values()].sort((a, b) => b.value - a.value); }
-
-function GoalsView({total,goals,onAdd}:{total:number;goals:Goal[];onAdd:()=>void}) {
-  const computed=goals.map(g=>({...g,value:g.name==="Meta geral da operação"?total:g.name==="Time Alpha"?Math.max(g.value,0):g.value}));
-  return <section><div className="top-toolbar"><div><span className="panel-kicker">OBJETIVOS</span><h3>Metas individuais e de equipe</h3></div><button className="primary-btn" onClick={onAdd}><Plus size={16}/> Criar meta</button></div><div className="goal-grid">{computed.map(g=>{const p=Math.min(100,Math.round(g.value/g.target*100));return <div className="panel goal-card" key={g.id}><div className="goal-card-head"><div className="metric-icon"><Target size={18}/></div><span className="goal-tag">{g.scope}</span></div><span>{g.name}</span><strong>{money(g.value)}</strong><div className="bar large"><i style={{width:`${p}%`}}/></div><div className="goal-foot"><span>{p}% atingido</span><b>Meta {money(g.target)}</b></div><p>{p>=100?"Meta alcançada!":`Faltam ${money(Math.max(0,g.target-g.value))}`}</p></div>})}<div className="panel create-goal"><div className="create-icon"><Plus size={24}/></div><h3>Nova meta</h3><p>Cadastre uma meta individual ou de equipe.</p><button className="primary-btn" onClick={onAdd}>Configurar meta</button></div></div></section>;
-}
-function TeamView({sales,users,role,onAdd,onToggle}:{sales:Sale[];users:AppUser[];role:Role;onAdd:()=>void;onToggle:(id:number)=>void}) {
-  const allowed=users.filter(u=>role==="Director"||u.role!=="Director");
-  return <section className="panel full-panel"><div className="panel-head"><div><span className="panel-kicker">HIERARQUIA</span><h3>Equipe, usuários e permissões</h3><p className="subhead">Hierarquia: Director → Master → Representative → Supervisor → Seller</p></div><button className="primary-btn" onClick={onAdd}><UserPlus size={16}/> Adicionar usuário</button></div><div className="role-cards">{[["Director","Acesso total","Toda a operação"],["Master","Gestão","Representantes + estrutura"],["Representative","Operação","Supervisores + vendedores"],["Supervisor","Equipe","Vendedores"],["Seller","Individual","Próprios resultados"]].map(r=><div className="role-card" key={r[0]}><ShieldCheck size={18}/><strong>{r[0]}</strong><span>{r[1]}</span><small>{r[2]}</small></div>)}</div><div className="table-wrap"><table><thead><tr><th>COLABORADOR</th><th>PERFIL</th><th>MASTER</th><th>REPRESENTANTE</th><th>SUPERVISOR</th><th>EQUIPE</th><th>ACESSO</th></tr></thead><tbody>{allowed.map(u=><tr key={u.id}><td><div className="person-cell"><div className="avatar small">{initials(u.name)}</div><strong>{u.name}</strong></div></td><td>{u.role}</td><td>{u.master||"—"}</td><td>{u.representative||"—"}</td><td>{u.supervisor||"—"}</td><td><span className="team-pill">{u.team||"—"}</span></td><td><button className="access-tag" onClick={()=>onToggle(u.id)}><Check size={13}/>{u.active?"Ativo":"Inativo"}</button></td></tr>)}</tbody></table></div></section>;
-}
-function DataTeam({ people }: { people: { name: string; supervisor: string; value: number }[] }) { return <div className="table-wrap"><table><thead><tr><th>COLABORADOR</th><th>PERFIL</th><th>SUPERVISOR</th><th>RESULTADO</th><th>META</th><th>ACESSO</th></tr></thead><tbody>{people.map((p, i) => <tr key={p.name}><td><div className="person-cell"><div className="avatar small">{initials(p.name)}</div><strong>{p.name}</strong></div></td><td>Seller</td><td>{p.supervisor}</td><td className="table-value">{money(p.value)}</td><td><span className="goal-tag">{Math.min(100, Math.round((p.value / 30000) * 100))}%</span></td><td><span className="access-tag"><Check size={13} /> Ativo</span></td></tr>)}</tbody></table></div>; }
-
-function ReportsView({sales}:{sales:Sale[]}) {
-  const [q,setQ]=useState(""); const [status,setStatus]=useState("Todos"); const [team,setTeam]=useState("Todas"); const [master,setMaster]=useState("Todos"); const [rep,setRep]=useState("Todos"); const [sup,setSup]=useState("Todos"); const [seller,setSeller]=useState("Todos"); const [from,setFrom]=useState(""); const [to,setTo]=useState("");
-  const filtered=sales.filter(s=>{const d=s.date;return (!q||[s.seller,s.supervisor,s.representative,s.master,s.team].join(" ").toLowerCase().includes(q.toLowerCase()))&&(status==="Todos"||s.status===status)&&(team==="Todas"||s.team===team)&&(master==="Todos"||s.master===master)&&(rep==="Todos"||s.representative===rep)&&(sup==="Todos"||s.supervisor===sup)&&(seller==="Todos"||s.seller===seller)&&(!from||d>=from)&&(!to||d<=to)});
-  const exportCsv=()=>{const rows=[["Vendedor","Supervisor","Representante","Master","Equipe","Data","Hora","Valor","Status"],...filtered.map(s=>[s.seller,s.supervisor,s.representative,s.master,s.team,s.date,s.time,String(s.value),s.status])];const csv=rows.map(r=>r.map(v=>`"${v.replaceAll('"','""')}"`).join(";")).join("\n");const blob=new Blob(["\\ufeff"+csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="dabliu-relatorio.csv";a.click();URL.revokeObjectURL(a.href);toast.success("Relatório exportado para Excel");};
-  const total=filtered.reduce((a,b)=>a+b.value,0);
-  return <section className="panel full-panel"><div className="panel-head"><div><span className="panel-kicker">RELATÓRIOS</span><h3>Histórico completo de vendas</h3><p className="subhead">{filtered.length} registros após filtros</p></div><div className="export-actions"><button className="outline-btn" onClick={exportCsv}><FileSpreadsheet size={16}/> Excel</button><button className="outline-btn" onClick={()=>window.print()}><Download size={16}/> PDF</button></div></div>
-  <div className="report-filters"><div><label>Busca</label><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar..."/></div><div><label>Data inicial</label><input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></div><div><label>Data final</label><input type="date" value={to} onChange={e=>setTo(e.target.value)}/></div><div><label>Status</label><select value={status} onChange={e=>setStatus(e.target.value)}><option>Todos</option><option>Confirmada</option><option>Pendente</option></select></div><div><label>Master</label><select value={master} onChange={e=>setMaster(e.target.value)}><option>Todos</option>{masters.map(x=><option key={x}>{x}</option>)}</select></div><div><label>Representante</label><select value={rep} onChange={e=>setRep(e.target.value)}><option>Todos</option>{representatives.map(x=><option key={x}>{x}</option>)}</select></div><div><label>Supervisor</label><select value={sup} onChange={e=>setSup(e.target.value)}><option>Todos</option>{supervisors.map(x=><option key={x}>{x}</option>)}</select></div><div><label>Vendedor</label><select value={seller} onChange={e=>setSeller(e.target.value)}><option>Todos</option>{sellers.map(x=><option key={x}>{x}</option>)}</select></div><div><label>Equipe</label><select value={team} onChange={e=>setTeam(e.target.value)}><option>Todas</option><option>Time Alpha</option><option>Time Beta</option><option>Time Gamma</option></select></div></div>
-  <div className="report-summary"><div><span>Total vendido</span><strong>{money(total)}</strong></div><div><span>Vendas</span><strong>{filtered.length}</strong></div><div><span>Ticket médio</span><strong>{money(filtered.length?total/filtered.length:0)}</strong></div><div><span>Confirmadas</span><strong>{filtered.filter(s=>s.status==="Confirmada").length}</strong></div></div><DataTable sales={filtered}/></section>;
-}
-function SaleModal({onClose,onSave}:{onClose:()=>void;onSave:(s:Sale)=>void}) {
-  const [seller,setSeller]=useState(sellers[0]); const [supervisor,setSupervisor]=useState(supervisors[0]); const [representative,setRepresentative]=useState(representatives[0]); const [master,setMaster]=useState(masters[0]); const [team,setTeam]=useState("Time Alpha"); const [value,setValue]=useState(10000); const [status,setStatus]=useState<Sale["status"]>("Confirmada");
-  const submit=(e:React.FormEvent)=>{e.preventDefault();const now=new Date();onSave({id:Date.now(),seller,supervisor,representative,master,team,value:Number(value),date:now.toISOString().slice(0,10),time:now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),status});};
-  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="sale-modal" onSubmit={submit}><div className="modal-head"><div><span className="panel-kicker">NOVA OPERAÇÃO</span><h3>Registrar venda</h3><p>Data e hora são preenchidas automaticamente.</p></div><button type="button" onClick={onClose}><X size={19}/></button></div><div className="form-grid"><label>Vendedor<select value={seller} onChange={e=>setSeller(e.target.value)}>{sellers.map(x=><option key={x}>{x}</option>)}</select></label><label>Supervisor<select value={supervisor} onChange={e=>setSupervisor(e.target.value)}>{supervisors.map(x=><option key={x}>{x}</option>)}</select></label><label>Representante<select value={representative} onChange={e=>setRepresentative(e.target.value)}>{representatives.map(x=><option key={x}>{x}</option>)}</select></label><label>Master<select value={master} onChange={e=>setMaster(e.target.value)}>{masters.map(x=><option key={x}>{x}</option>)}</select></label><label>Equipe<select value={team} onChange={e=>setTeam(e.target.value)}><option>Time Alpha</option><option>Time Beta</option><option>Time Gamma</option></select></label><label>Valor<input type="number" min="1" step="0.01" value={value} onChange={e=>setValue(Number(e.target.value))}/></label><label>Status<select value={status} onChange={e=>setStatus(e.target.value as Sale["status"])}><option>Confirmada</option><option>Pendente</option></select></label></div><div className="modal-note"><Zap size={17}/><span><strong>Tempo real ativado.</strong> A venda será sincronizada com outras abas abertas.</span></div><div className="modal-actions"><button type="button" className="outline-btn" onClick={onClose}>Cancelar</button><button className="primary-btn"><Check size={16}/> Confirmar venda</button></div></form></div>;
-}
-function UserModal({onClose,onSave}:{onClose:()=>void;onSave:(u:AppUser)=>void}) {
-  const [name,setName]=useState(""); const [role,setRole]=useState<Role>("Seller"); const [team,setTeam]=useState("Time Alpha"); const [supervisor,setSupervisor]=useState("Carlos Lima"); const [representative,setRepresentative]=useState("Marina Costa"); const [master,setMaster]=useState("Rafael Alves");
-  const submit=(e:React.FormEvent)=>{e.preventDefault();if(!name.trim()){toast.error("Informe o nome");return}onSave({id:Date.now(),name:name.trim(),role,team:role==="Seller"?team:"",supervisor:role==="Seller"||role==="Supervisor"?supervisor:"",representative:role==="Seller"||role==="Supervisor"||role==="Representative"?representative:"",master:role==="Director"?"":master,active:true})};
-  return <div className="modal-backdrop"><form className="sale-modal" onSubmit={submit}><div className="modal-head"><div><span className="panel-kicker">GESTÃO DE ACESSOS</span><h3>Novo usuário</h3></div><button type="button" onClick={onClose}><X size={19}/></button></div><div className="form-grid"><label>Nome<input value={name} onChange={e=>setName(e.target.value)} placeholder="Nome completo"/></label><label>Perfil<select value={role} onChange={e=>setRole(e.target.value as Role)}>{["Director","Master","Representative","Supervisor","Seller"].map(x=><option key={x}>{x}</option>)}</select></label><label>Master<select value={master} onChange={e=>setMaster(e.target.value)}><option>Rafael Alves</option></select></label><label>Representante<select value={representative} onChange={e=>setRepresentative(e.target.value)}><option>Marina Costa</option><option>Pedro Mendes</option></select></label><label>Supervisor<select value={supervisor} onChange={e=>setSupervisor(e.target.value)}><option>Carlos Lima</option><option>Juliana Alves</option></select></label><label>Equipe<select value={team} onChange={e=>setTeam(e.target.value)}><option>Time Alpha</option><option>Time Beta</option><option>Time Gamma</option></select></label></div><div className="modal-actions"><button type="button" className="outline-btn" onClick={onClose}>Cancelar</button><button className="primary-btn"><UserPlus size={16}/> Criar usuário</button></div></form></div>;
-}
-function GoalModal({onClose,onSave}:{onClose:()=>void;onSave:(g:Goal)=>void}) {
-  const [name,setName]=useState("");const [target,setTarget]=useState(50000);const [scope,setScope]=useState<Goal["scope"]>("Equipe");const [owner,setOwner]=useState("Time Alpha");
-  const submit=(e:React.FormEvent)=>{e.preventDefault();if(!name.trim()||target<=0){toast.error("Preencha nome e valor da meta");return}onSave({id:Date.now(),name:name.trim(),target:Number(target),value:0,scope,owner})};
-  return <div className="modal-backdrop"><form className="sale-modal" onSubmit={submit}><div className="modal-head"><div><span className="panel-kicker">OBJETIVOS</span><h3>Criar meta</h3></div><button type="button" onClick={onClose}><X size={19}/></button></div><div className="form-grid"><label>Nome da meta<input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Meta Time Alpha"/></label><label>Valor alvo<input type="number" min="1" value={target} onChange={e=>setTarget(Number(e.target.value))}/></label><label>Tipo<select value={scope} onChange={e=>setScope(e.target.value as Goal["scope"])}><option>Equipe</option><option>Individual</option></select></label><label>Responsável<select value={owner} onChange={e=>setOwner(e.target.value)}><option>Time Alpha</option><option>Time Beta</option><option>Time Gamma</option><option>Ana Martins</option></select></label></div><div className="modal-actions"><button type="button" className="outline-btn" onClick={onClose}>Cancelar</button><button className="primary-btn"><Target size={16}/> Criar meta</button></div></form></div>;
-}
-function TvPanel({ sales, onExit }: { sales: Sale[]; onExit: () => void }) { const [clock, setClock] = useState(new Date()); useEffect(() => { const id = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(id); }, []); const [active, setActive] = useState(0); useEffect(() => { const id = setInterval(() => setActive((x) => (x + 1) % Math.max(1, sales.length)), 6500); return () => clearInterval(id); }, [sales.length]); const sale = sales[active] || sales[0]; return <div className="tv-screen"><div className="tv-top"><div className="tv-brand"><div className="tv-logo">D</div><div><strong>DÁBLIU</strong><span>CENTRAL DE RESULTADOS</span></div></div><div className="tv-clock"><span>OPERAÇÃO AO VIVO</span><strong>{clock.toLocaleTimeString("pt-BR")}</strong></div><button onClick={onExit}>Sair da TV <X size={16} /></button></div><div className="airport-board"><div className="board-title"><span>ÚLTIMAS OPERAÇÕES</span><span><i /> LIVE • ATUALIZAÇÃO AUTOMÁTICA</span></div><div className="board-head"><span>HORA</span><span>VENDEDOR</span><span>SUPERVISOR</span><span>EQUIPE</span><span>VALOR</span><span>STATUS</span></div>{sales.slice(0, 7).map((s, i) => <div className={`board-row ${i === active ? "highlight" : ""}`} key={s.id}><strong>{s.time}</strong><span className="board-person"><b>{initials(s.seller)}</b>{s.seller}</span><span>{s.supervisor}</span><span>{s.team}</span><strong className="board-money">{money(s.value)}</strong><span className="board-status"><i /> CONFIRMADA</span></div>)}</div><div className="tv-bottom"><div><span>VENDAS HOJE</span><strong>{sales.filter((s) => s.date === "2026-09-17").length}</strong></div><div><span>RESULTADO HOJE</span><strong>{money(sales.filter((s) => s.date === "2026-09-17").reduce((a, b) => a + b.value, 0))}</strong></div><div><span>META MENSAL</span><strong>47%</strong></div><div className="tv-message"><Zap size={18} /><span>Nova venda aparece aqui automaticamente</span></div></div></div>; }
-function SalesView({sales,search,setSearch,onAdd}:{sales:Sale[];search:string;setSearch:(v:string)=>void;onAdd:()=>void}) {
-  const [status,setStatus]=useState("Todos"); const [team,setTeam]=useState("Todas");
-  const filtered=sales.filter(s=>([s.seller,s.supervisor,s.representative,s.master,s.team].join(" ").toLowerCase().includes(search.toLowerCase()))&&(status==="Todos"||s.status===status)&&(team==="Todas"||s.team===team));
-  return <section className="panel full-panel"><div className="panel-head"><div><span className="panel-kicker">OPERAÇÃO COMERCIAL</span><h3>Histórico de vendas</h3><p className="subhead">{filtered.length} registros encontrados</p></div><button className="primary-btn" onClick={onAdd}><Plus size={16}/> Nova venda</button></div><div className="filters"><div className="search"><Search size={17}/><input placeholder="Buscar vendedor, supervisor, equipe..." value={search} onChange={e=>setSearch(e.target.value)}/></div><select className="filter-btn" value={status} onChange={e=>setStatus(e.target.value)}><option>Todos</option><option>Confirmada</option><option>Pendente</option></select><select className="filter-btn" value={team} onChange={e=>setTeam(e.target.value)}><option>Todas</option><option>Time Alpha</option><option>Time Beta</option><option>Time Gamma</option></select></div><DataTable sales={filtered}/></section>;
-}
 function DataTable({ sales }: { sales: Sale[] }) { return <div className="table-wrap"><table><thead><tr><th>VENDEDOR</th><th>SUPERVISOR</th><th>EQUIPE</th><th>DATA / HORA</th><th>VALOR</th><th>STATUS</th><th /></tr></thead><tbody>{sales.map((s) => <tr key={s.id}><td><div className="person-cell"><div className="avatar small">{initials(s.seller)}</div><strong>{s.seller}</strong></div></td><td>{s.supervisor}</td><td><span className="team-pill">{s.team}</span></td><td>{new Date(`${s.date}T${s.time}`).toLocaleDateString("pt-BR")} <small>{s.time}</small></td><td className="table-value">{money(s.value)}</td><td><span className={`status ${s.status === "Confirmada" ? "confirmed" : "pending"}`}><i />{s.status}</span></td><td><button className="row-more"><MoreHorizontal size={17} /></button></td></tr>)}</tbody></table></div>; }
 
 function RankingView({ sales }: { sales: Sale[] }) { const [type, setType] = useState("Vendedores"); const data = type === "Vendedores" ? sellerRanking(sales) : type === "Supervisores" ? hierarchyRanking(sales, "supervisor") : type === "Representantes" ? hierarchyRanking(sales, "representative") : hierarchyRanking(sales, "master"); return <section className="panel full-panel"><div className="ranking-hero"><div><span className="panel-kicker">PERFORMANCE</span><h3>Quem está entregando resultado</h3><p>Ranking atualizado automaticamente a cada nova venda.</p></div><Trophy size={42} /></div><div className="rank-tabs">{["Vendedores", "Supervisores", "Representantes", "Masters"].map((x) => <button className={type === x ? "active" : ""} key={x} onClick={() => setType(x)}>{x}</button>)}</div><div className="leaderboard">{data.map((item, i) => <div className="leader-row" key={item.name}><div className={`leader-place place-${i + 1}`}>{i + 1}</div><div className="avatar">{initials(item.name)}</div><div className="leader-person"><strong>{item.name}</strong><span>{"sales" in item ? `${item.sales} vendas` : "Estrutura comercial"}</span></div><div className="leader-bar"><i style={{ width: `${Math.max(12, (item.value / data[0].value) * 100)}%` }} /></div><strong className="leader-money">{money(item.value)}</strong><span className="trend"><ArrowUpRight size={14} /> {i === 0 ? "24,8%" : `${18 - i * 3},2%`}</span></div>)}</div></section>; }
