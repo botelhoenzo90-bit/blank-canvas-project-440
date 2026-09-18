@@ -6,12 +6,12 @@ export const Route = createFileRoute("/")({
       { title: "Página em branco" },
       {
         name: "description",
-        content: "Uma página limpa e completamente vazia.",
+        content: "Página limpa e completamente vazia.",
       },
       { property: "og:title", content: "Página em branco" },
       {
         property: "og:description",
-        content: "Uma página limpa e completamente vazia.",
+        content: "Página limpa e completamente vazia.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
