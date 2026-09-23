@@ -33,7 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
 import { enablePushNotifications } from "@/lib/push";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
       { title: "Dábliu | Central de Resultados Comerciais" },
