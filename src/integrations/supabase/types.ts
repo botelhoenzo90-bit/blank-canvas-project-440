@@ -207,22 +207,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      claim_first_director: { Args: { _full_name: string }; Returns: boolean }
-      current_role: {
-        Args: { _user_id: string }
-        Returns: Database["public"]["Enums"]["app_role"]
-      }
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
-      is_in_my_structure: {
-        Args: { _target: string; _viewer: string }
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
       app_role:
