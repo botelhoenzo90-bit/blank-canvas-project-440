@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -32,6 +32,9 @@ import { Toaster, toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
 import { enablePushNotifications } from "@/lib/push";
+import { claimFirstDirector, getMyAccess } from "@/lib/auth.functions";
+import { PeoplePanel } from "@/components/people-panel";
+import logo from "@/assets/dabliu-logo.png.asset.json";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -63,16 +66,7 @@ type Sale = {
   status: "Confirmada" | "Pendente";
 };
 
-const seedSales: Sale[] = [
-  { id: "demo-101", seller: "Ana Martins", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 18500, date: "2026-09-17", time: "09:42", status: "Confirmada" },
-  { id: "demo-102", seller: "Bruno Rocha", supervisor: "Juliana Alves", representative: "Marina Costa", master: "Rafael Alves", team: "Time Beta", value: 12400, date: "2026-09-17", time: "09:18", status: "Confirmada" },
-  { id: "demo-103", seller: "Camila Souza", supervisor: "Carlos Lima", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Alpha", value: 9800, date: "2026-09-17", time: "08:56", status: "Confirmada" },
-  { id: "demo-104", seller: "Diego Santos", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 7600, date: "2026-09-16", time: "17:41", status: "Confirmada" },
-  { id: "demo-105", seller: "Fernanda Lima", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 21500, date: "2026-09-16", time: "16:33", status: "Confirmada" },
-  { id: "demo-106", seller: "Gabriel Melo", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 11200, date: "2026-09-16", time: "15:12", status: "Pendente" },
-  { id: "demo-107", seller: "Helena Dias", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 14300, date: "2026-09-15", time: "14:28", status: "Confirmada" },
-  { id: "demo-108", seller: "Igor Reis", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 8900, date: "2026-09-15", time: "13:17", status: "Confirmada" },
-];
+const seedSales: Sale[] = [];
 
 const sellers = ["Ana Martins", "Bruno Rocha", "Camila Souza", "Diego Santos", "Fernanda Lima", "Gabriel Melo", "Helena Dias", "Igor Reis"];
 const supervisors = ["Carlos Lima", "Juliana Alves"];
@@ -85,8 +79,11 @@ type SaleRow = import("@/integrations/supabase/types").Database["public"]["Table
 const saleFromRow = (row: SaleRow): Sale => ({ id: row.id, seller: row.seller, supervisor: row.supervisor, representative: row.representative, master: row.master, team: row.team, value: Number(row.value), date: row.sale_date, time: row.sale_time.slice(0, 5), status: row.status === "Pendente" ? "Pendente" : "Confirmada" });
 
 function DabliuApp() {
+  const navigateTo = useNavigate();
   const [view, setView] = useState<View>("dashboard");
-  const [role, setRole] = useState<Role>("Director");
+  const [role, setRole] = useState<Role | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [accessLoading, setAccessLoading] = useState(true);
   const [sales, setSales] = useState<Sale[]>(seedSales);
   const [period, setPeriod] = useState("Hoje");
   const [search, setSearch] = useState("");
@@ -98,6 +95,11 @@ function DabliuApp() {
   const [savingSale, setSavingSale] = useState(false);
   const createSale = useServerFn(createSaleAndNotify);
   const savePushDevice = useServerFn(registerPushDevice);
+  const loadAccess = useServerFn(getMyAccess);
+  const finishSetup = useServerFn(claimFirstDirector);
+
+  const refreshAccess = async () => { const access = await loadAccess(); setRole(access.role ? ({ director: "Director", master: "Master", representative: "Representative", supervisor: "Supervisor", seller: "Seller" } as const)[access.role] : null); setProfileName(access.profile?.full_name ?? ""); setAccessLoading(false); };
+  useEffect(() => { void refreshAccess().catch(() => setAccessLoading(false)); }, []);
 
   useEffect(() => {
     let active = true;
@@ -107,7 +109,7 @@ function DabliuApp() {
         toast.error("Não foi possível carregar as vendas");
         return;
       }
-      setSales(data.length ? data.map(saleFromRow) : seedSales);
+      setSales((data ?? []).map(saleFromRow));
     });
     const channel = supabase.channel("dabliu-live-sales").on("postgres_changes", { event: "INSERT", schema: "public", table: "sales" }, (payload) => {
       const newSale = saleFromRow(payload.new as SaleRow);
@@ -155,6 +157,10 @@ function DabliuApp() {
   };
 
   const navigate = (next: View) => { setView(next); setSidebarOpen(false); };
+  const signOut = async () => { await supabase.auth.signOut(); void navigateTo({ to: "/", replace: true }); };
+
+  if (accessLoading) return <div className="auth-page"><div className="auth-card"><img src={logo.url} alt="Dábliu Consórcios" className="auth-logo" /><p>Carregando seu acesso...</p></div></div>;
+  if (!role) return <InitialSetup name={profileName} onSetup={async (fullName) => { await finishSetup({ data: { fullName } }); await refreshAccess(); }} />;
 
   if (tvMode || view === "tv") {
     return <TvPanel sales={sales} announcement={tvAnnouncement} onExit={() => { setTvMode(false); setView("dashboard"); }} />;
@@ -163,7 +169,7 @@ function DabliuApp() {
   return (
     <div className="dab-app">
       <aside className={`dab-sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="dab-brand"><div className="dab-brand-mark">D</div><div><strong>Dábliu</strong><span>Central de Resultados</span></div></div>
+        <div className="dab-brand"><img src={logo.url} alt="Dábliu Consórcios" /><div><strong>Dábliu</strong><span>Central de Resultados</span></div></div>
         <div className="dab-workspace"><span>OPERAÇÃO</span><button><span className="live-dot" /> Operação Principal <ChevronDown size={15} /></button></div>
         <nav>
           <NavItem icon={<LayoutDashboard size={18} />} label="Visão geral" active={view === "dashboard"} onClick={() => navigate("dashboard")} />
@@ -174,20 +180,20 @@ function DabliuApp() {
           <NavItem icon={<Activity size={18} />} label="Relatórios" active={view === "reports"} onClick={() => navigate("reports")} />
           <div className="nav-divider" />
           <NavItem icon={<MonitorPlay size={18} />} label="Central TV" active={false} onClick={() => { setView("tv"); }} />
-          <NavItem icon={<ShieldCheck size={18} />} label="Permissões" active={false} onClick={() => toast.info("Controle por hierarquia", { description: "Director > Master > Representative > Supervisor > Seller" })} />
-          <NavItem icon={<Settings size={18} />} label="Configurações" active={false} onClick={() => toast.info("Configurações", { description: "Área preparada para regras da operação." })} />
+          {role === "Director" && <NavItem icon={<ShieldCheck size={18} />} label="Permissões" active={view === "team"} onClick={() => navigate("team")} />}
+          <NavItem icon={<Settings size={18} />} label="Sair" active={false} onClick={() => void signOut()} />
         </nav>
-        <div className="sidebar-bottom"><div className="mini-profile"><div className="avatar">EA</div><div><strong>Enzo Admin</strong><span>{role}</span></div><MoreHorizontal size={18} /></div></div>
+        <div className="sidebar-bottom"><div className="mini-profile"><div className="avatar">{initials(profileName || "Usuário")}</div><div><strong>{profileName || "Usuário"}</strong><span>{role}</span></div><MoreHorizontal size={18} /></div></div>
       </aside>
 
       <main className="dab-main">
         <header className="dab-header">
           <button className="mobile-menu" onClick={() => setSidebarOpen((v) => !v)}><Menu size={22} /></button>
-          <div><div className="breadcrumb">Dábliu <span>/</span> {view === "dashboard" ? "Visão geral" : view}</div><h1>{view === "dashboard" ? "Bom dia, Enzo" : titleFor(view)}</h1></div>
+          <div><div className="breadcrumb">Dábliu <span>/</span> {view === "dashboard" ? "Visão geral" : view}</div><h1>{view === "dashboard" ? `Olá, ${profileName.split(" ")[0] || "Usuário"}` : titleFor(view)}</h1></div>
           <div className="header-actions">
-            <div className="role-select"><ShieldCheck size={15} /><select value={role} onChange={(e) => setRole(e.target.value as Role)}>{["Director", "Master", "Representative", "Supervisor", "Seller"].map((r) => <option key={r}>{r}</option>)}</select></div>
+             <div className="role-select"><ShieldCheck size={15} /><strong>{role}</strong></div>
              <button className="icon-btn" aria-label="Notificações" onClick={() => setShowNotifications((v) => !v)}><Bell size={19} /></button>
-            <button className="avatar header-avatar">EA</button>
+             <button className="avatar header-avatar" onClick={() => void signOut()} title="Sair">{initials(profileName || "Usuário")}</button>
           </div>
            {showNotifications && <div className="notifications"><div className="notif-head"><strong>Notificações no celular</strong><button onClick={() => setShowNotifications(false)}><X size={16} /></button></div><div className="push-panel"><Bell size={20} /><p>Receba uma notificação sempre que uma venda for confirmada.</p><button className="primary-btn" onClick={() => void activateNotifications()}>Ativar notificações</button><small>No iPhone, adicione o Dábliu à Tela de Início primeiro.</small></div></div>}
         </header>
@@ -199,7 +205,7 @@ function DabliuApp() {
           {view === "sales" && <SalesView sales={sales} search={search} setSearch={setSearch} onAdd={() => setShowSaleModal(true)} />}
           {view === "ranking" && <RankingView sales={sales} />}
           {view === "goals" && <GoalsView total={monthTotal} />}
-          {view === "team" && <TeamView sales={sales} role={role} />}
+          {view === "team" && <PeoplePanel role={role.toLowerCase() as "director" | "master" | "representative" | "supervisor" | "seller"} />}
           {view === "reports" && <ReportsView sales={sales} />}
         </div>
       </main>
