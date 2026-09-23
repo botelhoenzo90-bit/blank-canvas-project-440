@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -28,6 +29,9 @@ import {
   Zap,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
+import { enablePushNotifications } from "@/lib/push";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -47,7 +51,7 @@ type Role = "Director" | "Master" | "Representative" | "Supervisor" | "Seller";
 type View = "dashboard" | "sales" | "ranking" | "goals" | "team" | "reports" | "tv";
 
 type Sale = {
-  id: number;
+  id: string;
   seller: string;
   supervisor: string;
   representative: string;
@@ -60,14 +64,14 @@ type Sale = {
 };
 
 const seedSales: Sale[] = [
-  { id: 101, seller: "Ana Martins", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 18500, date: "2026-09-17", time: "09:42", status: "Confirmada" },
-  { id: 102, seller: "Bruno Rocha", supervisor: "Juliana Alves", representative: "Marina Costa", master: "Rafael Alves", team: "Time Beta", value: 12400, date: "2026-09-17", time: "09:18", status: "Confirmada" },
-  { id: 103, seller: "Camila Souza", supervisor: "Carlos Lima", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Alpha", value: 9800, date: "2026-09-17", time: "08:56", status: "Confirmada" },
-  { id: 104, seller: "Diego Santos", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 7600, date: "2026-09-16", time: "17:41", status: "Confirmada" },
-  { id: 105, seller: "Fernanda Lima", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 21500, date: "2026-09-16", time: "16:33", status: "Confirmada" },
-  { id: 106, seller: "Gabriel Melo", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 11200, date: "2026-09-16", time: "15:12", status: "Pendente" },
-  { id: 107, seller: "Helena Dias", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 14300, date: "2026-09-15", time: "14:28", status: "Confirmada" },
-  { id: 108, seller: "Igor Reis", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 8900, date: "2026-09-15", time: "13:17", status: "Confirmada" },
+  { id: "demo-101", seller: "Ana Martins", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 18500, date: "2026-09-17", time: "09:42", status: "Confirmada" },
+  { id: "demo-102", seller: "Bruno Rocha", supervisor: "Juliana Alves", representative: "Marina Costa", master: "Rafael Alves", team: "Time Beta", value: 12400, date: "2026-09-17", time: "09:18", status: "Confirmada" },
+  { id: "demo-103", seller: "Camila Souza", supervisor: "Carlos Lima", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Alpha", value: 9800, date: "2026-09-17", time: "08:56", status: "Confirmada" },
+  { id: "demo-104", seller: "Diego Santos", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 7600, date: "2026-09-16", time: "17:41", status: "Confirmada" },
+  { id: "demo-105", seller: "Fernanda Lima", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 21500, date: "2026-09-16", time: "16:33", status: "Confirmada" },
+  { id: "demo-106", seller: "Gabriel Melo", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 11200, date: "2026-09-16", time: "15:12", status: "Pendente" },
+  { id: "demo-107", seller: "Helena Dias", supervisor: "Carlos Lima", representative: "Marina Costa", master: "Rafael Alves", team: "Time Alpha", value: 14300, date: "2026-09-15", time: "14:28", status: "Confirmada" },
+  { id: "demo-108", seller: "Igor Reis", supervisor: "Juliana Alves", representative: "Pedro Mendes", master: "Rafael Alves", team: "Time Beta", value: 8900, date: "2026-09-15", time: "13:17", status: "Confirmada" },
 ];
 
 const sellers = ["Ana Martins", "Bruno Rocha", "Camila Souza", "Diego Santos", "Fernanda Lima", "Gabriel Melo", "Helena Dias", "Igor Reis"];
@@ -77,6 +81,8 @@ const masters = ["Rafael Alves"];
 
 const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const initials = (name: string) => name.split(" ").map((x) => x[0]).slice(0, 2).join("");
+type SaleRow = import("@/integrations/supabase/types").Database["public"]["Tables"]["sales"]["Row"];
+const saleFromRow = (row: SaleRow): Sale => ({ id: row.id, seller: row.seller, supervisor: row.supervisor, representative: row.representative, master: row.master, team: row.team, value: Number(row.value), date: row.sale_date, time: row.sale_time.slice(0, 5), status: row.status === "Pendente" ? "Pendente" : "Confirmada" });
 
 function DabliuApp() {
   const [view, setView] = useState<View>("dashboard");
@@ -89,45 +95,63 @@ function DabliuApp() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [tvMode, setTvMode] = useState(false);
   const [tvAnnouncement, setTvAnnouncement] = useState<Sale | null>(null);
+  const [savingSale, setSavingSale] = useState(false);
+  const createSale = useServerFn(createSaleAndNotify);
+  const savePushDevice = useServerFn(registerPushDevice);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("dabliu-sales");
-      if (saved) setSales(JSON.parse(saved) as Sale[]);
-    } catch {
-      // Keep the demo data when browser storage is unavailable or invalid.
-    }
-  }, []);
-
-  useEffect(() => { localStorage.setItem("dabliu-sales", JSON.stringify(sales)); }, [sales]);
-
-  useEffect(() => {
-    const channel = "BroadcastChannel" in window ? new BroadcastChannel("dabliu-results") : null;
-    if (!channel) return;
-    channel.onmessage = (event) => {
-      if (event.data?.type === "sale") {
-        const newSale = event.data.sale as Sale;
-        setSales((current) => [newSale, ...current.filter((s) => s.id !== newSale.id)]);
-        setTvAnnouncement(newSale);
-        toast.success("Nova venda registrada", { description: `${newSale.seller} • ${money(newSale.value)}` });
+    let active = true;
+    void supabase.from("sales").select("*").order("created_at", { ascending: false }).then(({ data, error }) => {
+      if (!active) return;
+      if (error) {
+        toast.error("Não foi possível carregar as vendas");
+        return;
       }
+      setSales(data.length ? data.map(saleFromRow) : seedSales);
+    });
+    const channel = supabase.channel("dabliu-live-sales").on("postgres_changes", { event: "INSERT", schema: "public", table: "sales" }, (payload) => {
+      const newSale = saleFromRow(payload.new as SaleRow);
+      setSales((current) => [newSale, ...current.filter((sale) => sale.id !== newSale.id)]);
+      setTvAnnouncement(newSale);
+      toast.success("Nova venda registrada", { description: `${newSale.seller} • ${money(newSale.value)}` });
+    }).subscribe();
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
     };
-    return () => channel.close();
   }, []);
 
-  const todaySales = sales.filter((s) => s.date === "2026-09-17");
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const todaySales = sales.filter((s) => s.date === today);
   const todayTotal = todaySales.reduce((sum, s) => sum + s.value, 0);
   const monthTotal = sales.reduce((sum, s) => sum + s.value, 0);
   const avgTicket = sales.length ? monthTotal / sales.length : 0;
   const goal = 240000;
   const goalPct = Math.min(100, Math.round((monthTotal / goal) * 100));
 
-  const registerSale = (sale: Sale) => {
-    setSales((current) => [sale, ...current]);
-    setTvAnnouncement(sale);
-    setShowSaleModal(false);
-    toast.success("Venda registrada com sucesso", { description: `${sale.seller} • ${money(sale.value)}` });
-    if ("BroadcastChannel" in window) new BroadcastChannel("dabliu-results").postMessage({ type: "sale", sale });
+  const registerSale = async (sale: Omit<Sale, "id" | "date" | "time">) => {
+    setSavingSale(true);
+    try {
+      await createSale({ data: sale });
+      setShowSaleModal(false);
+      toast.success("Venda confirmada", { description: "A Central TV foi atualizada." });
+    } catch {
+      toast.error("Não foi possível registrar a venda", { description: "Confira sua conexão e tente novamente." });
+    } finally {
+      setSavingSale(false);
+    }
+  };
+
+  const activateNotifications = async () => {
+    const result = await enablePushNotifications();
+    if (result.status === "registered") {
+      await savePushDevice({ data: { token: result.token, deviceLabel: navigator.userAgent.slice(0, 160) } });
+      toast.success("Notificações ativadas neste aparelho");
+    } else if (result.status === "install-on-iphone") toast.info("Instale o Dábliu no iPhone", { description: "No Safari, toque em Compartilhar → Adicionar à Tela de Início. Abra pelo novo ícone e tente novamente." });
+    else if (result.status === "open-in-new-tab") toast.info("Abra o sistema em uma nova aba", { description: "As notificações não podem ser ativadas dentro da prévia do Lovable." });
+    else if (result.status === "not-configured") toast.error("Web Push ainda não está configurado", { description: "Atualize a conexão Firebase e marque Include web push." });
+    else if (result.status === "denied") toast.error("Notificações bloqueadas", { description: "Permita notificações nos ajustes deste site." });
+    else toast.error("Este aparelho não aceita notificações pelo navegador");
   };
 
   const navigate = (next: View) => { setView(next); setSidebarOpen(false); };
@@ -162,10 +186,10 @@ function DabliuApp() {
           <div><div className="breadcrumb">Dábliu <span>/</span> {view === "dashboard" ? "Visão geral" : view}</div><h1>{view === "dashboard" ? "Bom dia, Enzo" : titleFor(view)}</h1></div>
           <div className="header-actions">
             <div className="role-select"><ShieldCheck size={15} /><select value={role} onChange={(e) => setRole(e.target.value as Role)}>{["Director", "Master", "Representative", "Supervisor", "Seller"].map((r) => <option key={r}>{r}</option>)}</select></div>
-            <button className="icon-btn" onClick={() => setShowNotifications((v) => !v)}><Bell size={19} /><i>3</i></button>
+             <button className="icon-btn" aria-label="Notificações" onClick={() => setShowNotifications((v) => !v)}><Bell size={19} /></button>
             <button className="avatar header-avatar">EA</button>
           </div>
-          {showNotifications && <div className="notifications"><div className="notif-head"><strong>Notificações</strong><button onClick={() => setShowNotifications(false)}><X size={16} /></button></div><Notification text="Nova venda registrada por Ana Martins" time="agora" /><Notification text="Time Alpha atingiu 78% da meta" time="12 min" /><Notification text="Você subiu para #1 no ranking" time="31 min" /></div>}
+           {showNotifications && <div className="notifications"><div className="notif-head"><strong>Notificações no celular</strong><button onClick={() => setShowNotifications(false)}><X size={16} /></button></div><div className="push-panel"><Bell size={20} /><p>Receba uma notificação sempre que uma venda for confirmada.</p><button className="primary-btn" onClick={() => void activateNotifications()}>Ativar notificações</button><small>No iPhone, adicione o Dábliu à Tela de Início primeiro.</small></div></div>}
         </header>
 
         <div className="content">
@@ -180,7 +204,7 @@ function DabliuApp() {
         </div>
       </main>
 
-      {showSaleModal && <SaleModal onClose={() => setShowSaleModal(false)} onSave={registerSale} />}
+       {showSaleModal && <SaleModal onClose={() => setShowSaleModal(false)} onSave={registerSale} saving={savingSale} />}
       <Toaster position="bottom-right" richColors />
     </div>
   );
@@ -228,7 +252,7 @@ function DataTeam({ people }: { people: { name: string; supervisor: string; valu
 
 function ReportsView({ sales }: { sales: Sale[] }) { const exportCsv = () => { const csv = ["Vendedor;Supervisor;Representante;Master;Equipe;Data;Hora;Valor;Status", ...sales.map((s) => `${s.seller};${s.supervisor};${s.representative};${s.master};${s.team};${s.date};${s.time};${s.value};${s.status}`)].join("\n"); const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "dabliu-relatorio.csv"; a.click(); URL.revokeObjectURL(a.href); toast.success("Relatório exportado", { description: "Arquivo CSV compatível com Excel." }); }; return <section className="report-grid"><div className="panel full-panel"><div className="panel-head"><div><span className="panel-kicker">RELATÓRIOS</span><h3>Performance comercial</h3></div><div className="export-actions"><button className="outline-btn" onClick={exportCsv}><FileSpreadsheet size={16} /> Excel</button><button className="outline-btn" onClick={() => window.print()}><Download size={16} /> PDF</button></div></div><div className="report-filters"><div><label>Período</label><button>01/09/2026 — 17/09/2026 <CalendarDays size={15} /></button></div><div><label>Master</label><button>Todos <ChevronDown size={15} /></button></div><div><label>Representante</label><button>Todos <ChevronDown size={15} /></button></div><div><label>Supervisor</label><button>Todos <ChevronDown size={15} /></button></div></div><div className="report-summary"><div><span>Total vendido</span><strong>{money(sales.reduce((a, b) => a + b.value, 0))}</strong></div><div><span>Vendas</span><strong>{sales.length}</strong></div><div><span>Ticket médio</span><strong>{money(sales.reduce((a, b) => a + b.value, 0) / sales.length)}</strong></div><div><span>Confirmadas</span><strong>{sales.filter((s) => s.status === "Confirmada").length}</strong></div></div><DataTable sales={sales} /></div></section>; }
 
-function SaleModal({ onClose, onSave }: { onClose: () => void; onSave: (s: Sale) => void }) { const [seller, setSeller] = useState(sellers[0] ?? ""); const [supervisor, setSupervisor] = useState(supervisors[0] ?? ""); const [value, setValue] = useState(10000); const [team, setTeam] = useState("Time Alpha"); const submit = (e: React.FormEvent) => { e.preventDefault(); const now = new Date(); onSave({ id: Date.now(), seller, supervisor, representative: representatives[0] ?? "", master: masters[0] ?? "", team, value: Number(value), date: "2026-09-17", time: now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }), status: "Confirmada" }); }; return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><form className="sale-modal" onSubmit={submit}><div className="modal-head"><div><span className="panel-kicker">NOVA OPERAÇÃO</span><h3>Registrar venda</h3><p>A venda aparecerá automaticamente na Central TV.</p></div><button type="button" onClick={onClose}><X size={19} /></button></div><div className="form-grid"><label>Vendedor<select value={seller} onChange={(e) => setSeller(e.target.value)}>{sellers.map((x) => <option key={x}>{x}</option>)}</select></label><label>Supervisor<select value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>{supervisors.map((x) => <option key={x}>{x}</option>)}</select></label><label>Equipe<select value={team} onChange={(e) => setTeam(e.target.value)}><option>Time Alpha</option><option>Time Beta</option><option>Time Gamma</option></select></label><label>Valor da venda<input type="number" min="1" value={value} onChange={(e) => setValue(Number(e.target.value))} /></label></div><div className="modal-note"><Zap size={17} /><span><strong>Tempo real ativado.</strong> Esta operação sincroniza com outras telas abertas do Dábliu.</span></div><div className="modal-actions"><button type="button" className="outline-btn" onClick={onClose}>Cancelar</button><button className="primary-btn"><Check size={16} /> Confirmar venda</button></div></form></div>; }
+function SaleModal({ onClose, onSave, saving }: { onClose: () => void; onSave: (s: Omit<Sale, "id" | "date" | "time">) => Promise<void>; saving: boolean }) { const [seller, setSeller] = useState(sellers[0] ?? ""); const [supervisor, setSupervisor] = useState(supervisors[0] ?? ""); const [value, setValue] = useState(10000); const [team, setTeam] = useState("Time Alpha"); const submit = (e: React.FormEvent) => { e.preventDefault(); void onSave({ seller, supervisor, representative: representatives[0] ?? "", master: masters[0] ?? "", team, value: Number(value), status: "Confirmada" }); }; return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><form className="sale-modal" onSubmit={submit}><div className="modal-head"><div><span className="panel-kicker">NOVA OPERAÇÃO</span><h3>Registrar venda</h3><p>A venda aparecerá automaticamente na Central TV.</p></div><button type="button" onClick={onClose}><X size={19} /></button></div><div className="form-grid"><label>Vendedor<select value={seller} onChange={(e) => setSeller(e.target.value)}>{sellers.map((x) => <option key={x}>{x}</option>)}</select></label><label>Supervisor<select value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>{supervisors.map((x) => <option key={x}>{x}</option>)}</select></label><label>Equipe<select value={team} onChange={(e) => setTeam(e.target.value)}><option>Time Alpha</option><option>Time Beta</option><option>Time Gamma</option></select></label><label>Valor da venda<input type="number" min="1" value={value} onChange={(e) => setValue(Number(e.target.value))} /></label></div><div className="modal-note"><Zap size={17} /><span><strong>Tempo real ativado.</strong> Esta operação sincroniza com celular, computador e TV.</span></div><div className="modal-actions"><button type="button" className="outline-btn" onClick={onClose} disabled={saving}>Cancelar</button><button className="primary-btn" disabled={saving}><Check size={16} /> {saving ? "Confirmando..." : "Confirmar venda"}</button></div></form></div>; }
 
 function TvPanel({ sales, announcement, onExit }: { sales: Sale[]; announcement: Sale | null; onExit: () => void }) {
   const [clock, setClock] = useState(new Date());
@@ -240,8 +264,8 @@ function TvPanel({ sales, announcement, onExit }: { sales: Sale[]; announcement:
     const id = window.setTimeout(() => setFeaturedSale(null), 15000);
     return () => window.clearTimeout(id);
   }, [announcement]);
-  const today = new Date().toISOString().slice(0, 10);
-  const todaySales = sales.filter((s) => s.date === today || s.date === "2026-09-17");
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const todaySales = sales.filter((s) => s.date === today);
   return <div className="tv-screen">
     <div className="tv-top"><div className="tv-brand"><div className="tv-logo">D</div><div><strong>DÁBLIU</strong><span>CENTRAL DE RESULTADOS</span></div></div><div className="tv-clock"><span>OPERAÇÃO AO VIVO</span><strong>{clock.toLocaleTimeString("pt-BR")}</strong></div><button onClick={onExit}>Sair da TV <X size={16} /></button></div>
     {featuredSale ? <section className="sale-celebration" aria-live="assertive">
