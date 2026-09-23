@@ -14,6 +14,86 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_audit: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          details: Json
+          id: string
+          target_user_id: string
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+          target_user_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          target_user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          active: boolean
+          avatar_url: string | null
+          created_at: string
+          created_by: string | null
+          full_name: string
+          job_title: string
+          manager_id: string | null
+          preferences: Json
+          team: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          full_name?: string
+          job_title?: string
+          manager_id?: string | null
+          preferences?: Json
+          team?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          full_name?: string
+          job_title?: string
+          manager_id?: string | null
+          preferences?: Json
+          team?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       push_devices: {
         Row: {
           active: boolean
@@ -23,6 +103,7 @@ export type Database = {
           last_seen_at: string
           token: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           active?: boolean
@@ -32,6 +113,7 @@ export type Database = {
           last_seen_at?: string
           token: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           active?: boolean
@@ -41,6 +123,7 @@ export type Database = {
           last_seen_at?: string
           token?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -49,6 +132,7 @@ export type Database = {
           created_at: string
           id: string
           master: string
+          owner_id: string | null
           representative: string
           sale_date: string
           sale_time: string
@@ -63,6 +147,7 @@ export type Database = {
           created_at?: string
           id?: string
           master: string
+          owner_id?: string | null
           representative: string
           sale_date?: string
           sale_time?: string
@@ -77,6 +162,7 @@ export type Database = {
           created_at?: string
           id?: string
           master?: string
+          owner_id?: string | null
           representative?: string
           sale_date?: string
           sale_time?: string
@@ -89,6 +175,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -97,7 +210,12 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "director"
+        | "master"
+        | "representative"
+        | "supervisor"
+        | "seller"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -224,6 +342,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "director",
+        "master",
+        "representative",
+        "supervisor",
+        "seller",
+      ],
+    },
   },
 } as const
