@@ -88,6 +88,7 @@ function DabliuApp() {
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [tvMode, setTvMode] = useState(false);
+  const [tvAnnouncement, setTvAnnouncement] = useState<Sale | null>(null);
 
   useEffect(() => {
     try {
@@ -105,8 +106,10 @@ function DabliuApp() {
     if (!channel) return;
     channel.onmessage = (event) => {
       if (event.data?.type === "sale") {
-        setSales((current) => [event.data.sale, ...current.filter((s) => s.id !== event.data.sale.id)]);
-        toast.success("Nova venda registrada", { description: `${event.data.sale.seller} • ${money(event.data.sale.value)}` });
+        const newSale = event.data.sale as Sale;
+        setSales((current) => [newSale, ...current.filter((s) => s.id !== newSale.id)]);
+        setTvAnnouncement(newSale);
+        toast.success("Nova venda registrada", { description: `${newSale.seller} • ${money(newSale.value)}` });
       }
     };
     return () => channel.close();
@@ -121,6 +124,7 @@ function DabliuApp() {
 
   const registerSale = (sale: Sale) => {
     setSales((current) => [sale, ...current]);
+    setTvAnnouncement(sale);
     setShowSaleModal(false);
     toast.success("Venda registrada com sucesso", { description: `${sale.seller} • ${money(sale.value)}` });
     if ("BroadcastChannel" in window) new BroadcastChannel("dabliu-results").postMessage({ type: "sale", sale });
@@ -129,7 +133,7 @@ function DabliuApp() {
   const navigate = (next: View) => { setView(next); setSidebarOpen(false); };
 
   if (tvMode || view === "tv") {
-    return <TvPanel sales={sales} onExit={() => { setTvMode(false); setView("dashboard"); }} />;
+    return <TvPanel sales={sales} announcement={tvAnnouncement} onExit={() => { setTvMode(false); setView("dashboard"); }} />;
   }
 
   return (
@@ -226,4 +230,30 @@ function ReportsView({ sales }: { sales: Sale[] }) { const exportCsv = () => { c
 
 function SaleModal({ onClose, onSave }: { onClose: () => void; onSave: (s: Sale) => void }) { const [seller, setSeller] = useState(sellers[0] ?? ""); const [supervisor, setSupervisor] = useState(supervisors[0] ?? ""); const [value, setValue] = useState(10000); const [team, setTeam] = useState("Time Alpha"); const submit = (e: React.FormEvent) => { e.preventDefault(); const now = new Date(); onSave({ id: Date.now(), seller, supervisor, representative: representatives[0] ?? "", master: masters[0] ?? "", team, value: Number(value), date: "2026-09-17", time: now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }), status: "Confirmada" }); }; return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><form className="sale-modal" onSubmit={submit}><div className="modal-head"><div><span className="panel-kicker">NOVA OPERAÇÃO</span><h3>Registrar venda</h3><p>A venda aparecerá automaticamente na Central TV.</p></div><button type="button" onClick={onClose}><X size={19} /></button></div><div className="form-grid"><label>Vendedor<select value={seller} onChange={(e) => setSeller(e.target.value)}>{sellers.map((x) => <option key={x}>{x}</option>)}</select></label><label>Supervisor<select value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>{supervisors.map((x) => <option key={x}>{x}</option>)}</select></label><label>Equipe<select value={team} onChange={(e) => setTeam(e.target.value)}><option>Time Alpha</option><option>Time Beta</option><option>Time Gamma</option></select></label><label>Valor da venda<input type="number" min="1" value={value} onChange={(e) => setValue(Number(e.target.value))} /></label></div><div className="modal-note"><Zap size={17} /><span><strong>Tempo real ativado.</strong> Esta operação sincroniza com outras telas abertas do Dábliu.</span></div><div className="modal-actions"><button type="button" className="outline-btn" onClick={onClose}>Cancelar</button><button className="primary-btn"><Check size={16} /> Confirmar venda</button></div></form></div>; }
 
-function TvPanel({ sales, onExit }: { sales: Sale[]; onExit: () => void }) { const [clock, setClock] = useState(new Date()); useEffect(() => { const id = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(id); }, []); const [active, setActive] = useState(0); useEffect(() => { const id = setInterval(() => setActive((x) => (x + 1) % Math.max(1, sales.length)), 6500); return () => clearInterval(id); }, [sales.length]); const sale = sales[active] || sales[0]; return <div className="tv-screen"><div className="tv-top"><div className="tv-brand"><div className="tv-logo">D</div><div><strong>DÁBLIU</strong><span>CENTRAL DE RESULTADOS</span></div></div><div className="tv-clock"><span>OPERAÇÃO AO VIVO</span><strong>{clock.toLocaleTimeString("pt-BR")}</strong></div><button onClick={onExit}>Sair da TV <X size={16} /></button></div><div className="airport-board"><div className="board-title"><span>ÚLTIMAS OPERAÇÕES</span><span><i /> LIVE • ATUALIZAÇÃO AUTOMÁTICA</span></div><div className="board-head"><span>HORA</span><span>VENDEDOR</span><span>SUPERVISOR</span><span>EQUIPE</span><span>VALOR</span><span>STATUS</span></div>{sales.slice(0, 7).map((s, i) => <div className={`board-row ${i === active ? "highlight" : ""}`} key={s.id}><strong>{s.time}</strong><span className="board-person"><b>{initials(s.seller)}</b>{s.seller}</span><span>{s.supervisor}</span><span>{s.team}</span><strong className="board-money">{money(s.value)}</strong><span className="board-status"><i /> CONFIRMADA</span></div>)}</div><div className="tv-bottom"><div><span>VENDAS HOJE</span><strong>{sales.filter((s) => s.date === "2026-09-17").length}</strong></div><div><span>RESULTADO HOJE</span><strong>{money(sales.filter((s) => s.date === "2026-09-17").reduce((a, b) => a + b.value, 0))}</strong></div><div><span>META MENSAL</span><strong>47%</strong></div><div className="tv-message"><Zap size={18} /><span>Nova venda aparece aqui automaticamente</span></div></div></div>; }
+function TvPanel({ sales, announcement, onExit }: { sales: Sale[]; announcement: Sale | null; onExit: () => void }) {
+  const [clock, setClock] = useState(new Date());
+  const [featuredSale, setFeaturedSale] = useState<Sale | null>(null);
+  useEffect(() => { const id = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(id); }, []);
+  useEffect(() => {
+    if (!announcement) return;
+    setFeaturedSale(announcement);
+    const id = window.setTimeout(() => setFeaturedSale(null), 15000);
+    return () => window.clearTimeout(id);
+  }, [announcement]);
+  const today = new Date().toISOString().slice(0, 10);
+  const todaySales = sales.filter((s) => s.date === today || s.date === "2026-09-17");
+  return <div className="tv-screen">
+    <div className="tv-top"><div className="tv-brand"><div className="tv-logo">D</div><div><strong>DÁBLIU</strong><span>CENTRAL DE RESULTADOS</span></div></div><div className="tv-clock"><span>OPERAÇÃO AO VIVO</span><strong>{clock.toLocaleTimeString("pt-BR")}</strong></div><button onClick={onExit}>Sair da TV <X size={16} /></button></div>
+    {featuredSale ? <section className="sale-celebration" aria-live="assertive">
+      <span className="celebration-live"><i /> NOVA VENDA CONFIRMADA</span>
+      <div className="celebration-avatar">{initials(featuredSale.seller)}</div>
+      <p>Parabéns,</p><h1>{featuredSale.seller}</h1>
+      <strong className="celebration-value">{money(featuredSale.value)}</strong>
+      <div className="celebration-meta"><span>{featuredSale.team}</span><i /> <span>{featuredSale.time}</span></div>
+      <div className="celebration-timer"><i /><span>O painel retorna automaticamente em 15 segundos</span></div>
+    </section> : <>
+      <div className="airport-board"><div className="board-title"><span>ÚLTIMAS OPERAÇÕES</span><span><i /> LIVE • ATUALIZAÇÃO AUTOMÁTICA</span></div><div className="board-head"><span>HORA</span><span>VENDEDOR</span><span>SUPERVISOR</span><span>EQUIPE</span><span>VALOR</span><span>STATUS</span></div>{sales.slice(0, 7).map((s, i) => <div className={`board-row ${i === 0 ? "highlight" : ""}`} key={s.id}><strong>{s.time}</strong><span className="board-person"><b>{initials(s.seller)}</b>{s.seller}</span><span>{s.supervisor}</span><span>{s.team}</span><strong className="board-money">{money(s.value)}</strong><span className="board-status"><i /> CONFIRMADA</span></div>)}</div>
+      <div className="tv-bottom"><div><span>VENDAS HOJE</span><strong>{todaySales.length}</strong></div><div><span>RESULTADO HOJE</span><strong>{money(todaySales.reduce((a, b) => a + b.value, 0))}</strong></div><div><span>META MENSAL</span><strong>47%</strong></div><div className="tv-message"><Zap size={18} /><span>Nova venda aparece aqui automaticamente</span></div></div>
+    </>}
+  </div>;
+}
