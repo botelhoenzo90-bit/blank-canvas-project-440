@@ -20,7 +20,7 @@ export const listPeople = createServerFn({ method: "GET" }).middleware([requireS
   ]);
   if (error) throw new Error("Não foi possível carregar a equipe.");
   const roleMap = new Map((roles ?? []).map((item) => [item.user_id, item.role]));
-  return (profiles ?? []).map((profile) => ({ ...profile, role: roleMap.get(profile.user_id) ?? "seller" }));
+  return (profiles ?? []).map((profile) => ({ ...profile, role: roleMap.get(profile.user_id) ?? null }));
 });
 
 export const createPerson = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input) => personSchema.parse(input)).handler(async ({ data, context }) => {
@@ -41,7 +41,7 @@ export const updatePerson = createServerFn({ method: "POST" }).middleware([requi
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { error } = await supabaseAdmin.from("profiles").update({ full_name: data.fullName, job_title: data.jobTitle, team: data.team, manager_id: data.managerId, active: data.active, updated_by: context.userId }).eq("user_id", data.userId);
   if (error) throw new Error("Não foi possível atualizar esta pessoa.");
-  await supabaseAdmin.from("user_roles").update({ role: data.role, assigned_by: context.userId }).eq("user_id", data.userId);
+  await supabaseAdmin.from("user_roles").upsert({ user_id: data.userId, role: data.role, assigned_by: context.userId }, { onConflict: "user_id,role" });
   if (!data.active) await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "876000h" });
   else await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "none" });
   await supabaseAdmin.from("access_audit").insert({ actor_id: context.userId, target_user_id: data.userId, action: "USER_UPDATED", details: { role: data.role, active: data.active } });
