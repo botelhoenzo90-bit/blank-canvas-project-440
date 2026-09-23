@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const saleSchema = z.object({
   seller: z.string().trim().min(1).max(120),
@@ -17,11 +18,11 @@ const deviceSchema = z.object({
 });
 
 export const registerPushDevice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input) => deviceSchema.parse(input))
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("push_devices").upsert(
-      { token: data.token, device_label: data.deviceLabel, active: true, last_seen_at: new Date().toISOString() },
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("push_devices").upsert(
+      { token: data.token, user_id: context.userId, device_label: data.deviceLabel, active: true, last_seen_at: new Date().toISOString() },
       { onConflict: "token" },
     );
     if (error) throw new Error("Não foi possível cadastrar este aparelho.");
@@ -29,8 +30,9 @@ export const registerPushDevice = createServerFn({ method: "POST" })
   });
 
 export const createSaleAndNotify = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input) => saleSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const now = new Date();
     const saleDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
@@ -50,6 +52,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       sale_date: saleDate,
       sale_time: saleTime,
       status: data.status,
+      owner_id: context.userId,
     }).select().single();
     if (error || !sale) throw new Error("Não foi possível registrar a venda.");
 
