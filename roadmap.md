@@ -5,6 +5,7 @@
 - [x] Persistir vendas e atualizar a Central TV em tempo real entre aparelhos
 - [x] Concluir a configuração Web Push no Firebase
 - [x] Criar login, cadastro inicial e recuperação de senha
+- [x] Cadastro sem confirmação de e-mail, com aprovação pelo Director
 - [x] Aplicar perfis completos e permissões por hierarquia
 - [x] Proteger vendas, aparelhos e administração no Supabase
 - [x] Remover exemplos visuais preservando vendas reais
