@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      push_devices: {
+        Row: {
+          active: boolean
+          created_at: string
+          device_label: string
+          id: string
+          last_seen_at: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          device_label?: string
+          id?: string
+          last_seen_at?: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          device_label?: string
+          id?: string
+          last_seen_at?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sales: {
+        Row: {
+          created_at: string
+          id: string
+          master: string
+          representative: string
+          sale_date: string
+          sale_time: string
+          seller: string
+          status: string
+          supervisor: string
+          team: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          master: string
+          representative: string
+          sale_date?: string
+          sale_time?: string
+          seller: string
+          status?: string
+          supervisor: string
+          team: string
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          master?: string
+          representative?: string
+          sale_date?: string
+          sale_time?: string
+          seller?: string
+          status?: string
+          supervisor?: string
+          team?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
