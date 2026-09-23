@@ -4,6 +4,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const setupSchema = z.object({ fullName: z.string().trim().min(3).max(120) });
 
+export const getSetupStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { count } = await supabaseAdmin.from("user_roles").select("id", { count: "exact", head: true });
+  return { needsSetup: (count ?? 0) === 0 };
+});
+
 export const getMyAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
