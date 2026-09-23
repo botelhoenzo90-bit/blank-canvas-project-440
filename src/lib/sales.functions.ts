@@ -34,6 +34,17 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
   .inputValidator((input) => saleSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: owner } = await supabaseAdmin.from("profiles").select("full_name, team, manager_id, active").eq("user_id", context.userId).single();
+    if (!owner?.active) throw new Error("Seu acesso está inativo.");
+    const chain: Array<{ user_id: string; full_name: string; manager_id: string | null; role?: string }> = [];
+    let managerId = owner.manager_id;
+    for (let depth = 0; managerId && depth < 4; depth += 1) {
+      const { data: manager } = await supabaseAdmin.from("profiles").select("user_id, full_name, manager_id").eq("user_id", managerId).maybeSingle();
+      if (!manager) break;
+      const { data: managerRole } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", manager.user_id).maybeSingle();
+      chain.push({ ...manager, role: managerRole?.role }); managerId = manager.manager_id;
+    }
+    const byRole = (wanted: string) => chain.find((item) => item.role === wanted)?.full_name ?? "—";
     const now = new Date();
     const saleDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
     const saleTime = new Intl.DateTimeFormat("pt-BR", {
@@ -43,11 +54,11 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       hour12: false,
     }).format(now);
     const { data: sale, error } = await supabaseAdmin.from("sales").insert({
-      seller: data.seller,
-      supervisor: data.supervisor,
-      representative: data.representative,
-      master: data.master,
-      team: data.team,
+      seller: owner.full_name,
+      supervisor: byRole("supervisor"),
+      representative: byRole("representative"),
+      master: byRole("master"),
+      team: owner.team || data.team,
       value: data.value,
       sale_date: saleDate,
       sale_time: saleTime,
@@ -71,7 +82,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
           body: JSON.stringify({
             message: {
               token,
-              notification: { title: "Nova venda confirmada", body: `${data.seller} vendeu ${data.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} • ${data.team}` },
+               notification: { title: "Nova venda confirmada", body: `${owner.full_name} vendeu ${data.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} • ${owner.team || data.team}` },
               data: { path: "/", saleId: sale.id },
               webpush: { fcm_options: { link: "/" } },
             },
