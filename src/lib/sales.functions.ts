@@ -54,7 +54,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
     if (error || !sale) throw new Error("Não foi possível registrar a venda.");
 
     const lovableApiKey = process.env["LOVABLE_API_KEY"];
-    const firebaseApiKey = process.env["FIREBASE_MESSAGING_API_KEY"];
+    const firebaseApiKey = process.env["FIREBASE_MESSAGING_API_KEY_1"] ?? process.env["FIREBASE_MESSAGING_API_KEY"];
     if (lovableApiKey && firebaseApiKey && data.status === "Confirmada") {
       const { data: devices } = await supabaseAdmin.from("push_devices").select("token").eq("active", true);
       await Promise.allSettled((devices ?? []).map(async ({ token }) => {
