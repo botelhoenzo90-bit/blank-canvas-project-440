@@ -42,7 +42,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       const { data: manager } = await supabaseAdmin.from("profiles").select("user_id, full_name, manager_id").eq("user_id", managerId).maybeSingle();
       if (!manager) break;
       const { data: managerRole } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", manager.user_id).maybeSingle();
-      chain.push({ ...manager, role: managerRole?.role }); managerId = manager.manager_id;
+      chain.push({ ...manager, ...(managerRole?.role ? { role: managerRole.role } : {}) }); managerId = manager.manager_id;
     }
     const byRole = (wanted: string) => chain.find((item) => item.role === wanted)?.full_name ?? "—";
     const now = new Date();
