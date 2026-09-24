@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { randomBytes, createHash } from "crypto";
 
 const roleSchema = z.enum(["director", "master", "representative", "supervisor", "seller"]);
 const personSchema = z.object({
@@ -18,8 +17,9 @@ async function assertDirector(context: { supabase: any; userId: string }) {
 
 export const createAdminInvite = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input) => inviteSchema.parse(input)).handler(async ({ data, context }) => {
   await assertDirector(context);
-  const code = randomBytes(12).toString("hex").toUpperCase();
-  const codeHash = createHash("sha256").update(code).digest("hex");
+  const code = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "").slice(0, 24).toUpperCase();
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
+  const codeHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
   const expiresAt = new Date(Date.now() + data.validDays * 86400000).toISOString();
   const { error } = await context.supabase.from("admin_invites").insert({ code_hash: codeHash, role: data.role, created_by: context.userId, expires_at: expiresAt });
   if (error) throw new Error("Não foi possível criar o convite.");

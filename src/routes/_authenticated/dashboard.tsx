@@ -53,6 +53,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 type Role = "Presidente/Diretor" | "Super Master" | "Representante" | "Supervisor" | "Vendedor";
 type View = "dashboard" | "sales" | "ranking" | "goals" | "team" | "reports" | "tv";
+const roleKey = (role: Role) => ({ "Presidente/Diretor": "director", "Super Master": "master", Representante: "representative", Supervisor: "supervisor", Vendedor: "seller" } as const)[role];
 
 type Sale = {
   id: string;
@@ -206,7 +207,7 @@ function DabliuApp() {
            {view === "sales" && <SalesView sales={periodSales} search={search} setSearch={setSearch} onAdd={() => setShowSaleModal(true)} />}
            {view === "ranking" && <RankingView sales={periodSales} />}
            {view === "goals" && <GoalsView />}
-          {view === "team" && <PeoplePanel role={role.toLowerCase() as "director" | "master" | "representative" | "supervisor" | "seller"} />}
+           {view === "team" && <PeoplePanel role={roleKey(role)} />}
           {view === "reports" && <ReportsView sales={sales} />}
         </div>
       </main>
