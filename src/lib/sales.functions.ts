@@ -3,11 +3,6 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const saleSchema = z.object({
-  seller: z.string().trim().min(1).max(120),
-  supervisor: z.string().trim().min(1).max(120),
-  representative: z.string().trim().min(1).max(120),
-  master: z.string().trim().min(1).max(120),
-  team: z.string().trim().min(1).max(120),
   value: z.number().positive().max(999999999999),
   status: z.enum(["Confirmada", "Pendente"]),
 });
@@ -58,7 +53,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       supervisor: byRole("supervisor"),
       representative: byRole("representative"),
       master: byRole("master"),
-      team: owner.team || data.team,
+      team: owner.team || "—",
       value: data.value,
       sale_date: saleDate,
       sale_time: saleTime,
@@ -82,7 +77,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
           body: JSON.stringify({
             message: {
               token,
-               notification: { title: "Nova venda confirmada", body: `${owner.full_name} vendeu ${data.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} • ${owner.team || data.team}` },
+               notification: { title: "Nova venda confirmada", body: `${owner.full_name} vendeu ${data.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}${owner.team ? ` • ${owner.team}` : ""}` },
               data: { path: "/", saleId: sale.id },
               webpush: { fcm_options: { link: "/" } },
             },
