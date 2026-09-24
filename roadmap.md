@@ -23,3 +23,4 @@
 - [x] Ensinar a instalar no iPhone e Android para receber notificações
 - [x] Ampliar o cadastro e a exibição das informações das vendas
 - [x] Deixar somente a logomarca no topo do sistema
+- [x] Liberar o cadastro de todas as funções sem código de convite
