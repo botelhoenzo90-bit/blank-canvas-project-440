@@ -5,7 +5,7 @@
 - [x] Persistir vendas e atualizar a Central TV em tempo real entre aparelhos
 - [x] Concluir a configuração Web Push no Firebase
 - [x] Criar login, cadastro inicial e recuperação de senha
-- [x] Cadastro sem confirmação de e-mail, com aprovação pelo Director
+- [x] Cadastro imediato sem confirmação de e-mail ou aprovação
 - [x] Remover a configuração pública do primeiro Director
 - [x] Aplicar tema branco padrão com opção de modo escuro
 - [x] Aplicar perfis completos e permissões por hierarquia
@@ -18,3 +18,5 @@
 - [x] Zerar vendas e aparelhos antigos, preservando somente o Director
 - [x] Remover nomes, equipes, metas e percentuais demonstrativos
 - [x] Aplicar tema claro como padrão também na Central TV
+- [x] Guardar telefone, e-mail e função no perfil de cada pessoa
+- [x] Proteger Presidente/Diretor e Super Master com convite temporário

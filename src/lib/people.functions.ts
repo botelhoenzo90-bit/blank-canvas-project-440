@@ -5,14 +5,26 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const roleSchema = z.enum(["director", "master", "representative", "supervisor", "seller"]);
 const personSchema = z.object({
   email: z.string().email().max(200), password: z.string().min(8).max(72), fullName: z.string().trim().min(3).max(120),
-  role: roleSchema, jobTitle: z.string().trim().max(100), team: z.string().trim().max(100), managerId: z.string().uuid().nullable(),
+  phone: z.string().trim().min(10).max(20), role: roleSchema, jobTitle: z.string().trim().max(100), team: z.string().trim().max(100), managerId: z.string().uuid().nullable(),
 });
-const updateSchema = z.object({ userId: z.string().uuid(), fullName: z.string().trim().min(3).max(120), role: roleSchema, jobTitle: z.string().trim().max(100), team: z.string().trim().max(100), managerId: z.string().uuid().nullable(), active: z.boolean() });
+const updateSchema = z.object({ userId: z.string().uuid(), fullName: z.string().trim().min(3).max(120), phone: z.string().trim().max(20), role: roleSchema, jobTitle: z.string().trim().max(100), team: z.string().trim().max(100), managerId: z.string().uuid().nullable(), active: z.boolean() });
+const inviteSchema = z.object({ role: z.enum(["director", "master"]), validDays: z.number().int().min(1).max(30) });
 
 async function assertDirector(context: { supabase: any; userId: string }) {
   const { data } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
-  if (data?.role !== "director") throw new Error("Apenas o Director pode administrar pessoas.");
+  if (data?.role !== "director") throw new Error("Apenas Presidente/Diretor pode administrar pessoas.");
 }
+
+export const createAdminInvite = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input) => inviteSchema.parse(input)).handler(async ({ data, context }) => {
+  await assertDirector(context);
+  const code = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "").slice(0, 24).toUpperCase();
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
+  const codeHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const expiresAt = new Date(Date.now() + data.validDays * 86400000).toISOString();
+  const { error } = await context.supabase.from("admin_invites").insert({ code_hash: codeHash, role: data.role, created_by: context.userId, expires_at: expiresAt });
+  if (error) throw new Error("Não foi possível criar o convite.");
+  return { code, expiresAt };
+});
 
 export const listPeople = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
   const [{ data: profiles, error }, { data: roles }] = await Promise.all([
@@ -26,10 +38,10 @@ export const listPeople = createServerFn({ method: "GET" }).middleware([requireS
 export const createPerson = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input) => personSchema.parse(input)).handler(async ({ data, context }) => {
   await assertDirector(context);
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: data.password, email_confirm: true, user_metadata: { full_name: data.fullName } });
+  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: data.password, email_confirm: true, user_metadata: { full_name: data.fullName, phone: data.phone } });
   if (error || !created.user) throw new Error(error?.message ?? "Não foi possível criar o acesso.");
   const userId = created.user.id;
-  const { error: profileError } = await supabaseAdmin.from("profiles").insert({ user_id: userId, full_name: data.fullName, job_title: data.jobTitle, team: data.team, manager_id: data.managerId, active: true, created_by: context.userId, updated_by: context.userId });
+  const { error: profileError } = await supabaseAdmin.from("profiles").insert({ user_id: userId, full_name: data.fullName, phone: data.phone, email: data.email, job_title: data.jobTitle, team: data.team, manager_id: data.managerId, active: true, created_by: context.userId, updated_by: context.userId });
   if (profileError) { await supabaseAdmin.auth.admin.deleteUser(userId); throw new Error("Não foi possível salvar o perfil."); }
   await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: data.role, assigned_by: context.userId });
   await supabaseAdmin.from("access_audit").insert({ actor_id: context.userId, target_user_id: userId, action: "USER_CREATED", details: { role: data.role } });
@@ -44,10 +56,10 @@ export const updatePerson = createServerFn({ method: "POST" }).middleware([requi
     ? await supabaseAdmin.from("user_roles").update({ role: data.role, assigned_by: context.userId }).eq("user_id", data.userId)
     : await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: data.role, assigned_by: context.userId });
   if (roleResult.error) throw new Error("Não foi possível definir a permissão desta pessoa.");
-  const { error } = await supabaseAdmin.from("profiles").update({ full_name: data.fullName, job_title: data.jobTitle, team: data.team, manager_id: data.managerId, active: data.active, updated_by: context.userId }).eq("user_id", data.userId);
+  const { error } = await supabaseAdmin.from("profiles").update({ full_name: data.fullName, phone: data.phone, job_title: data.jobTitle, team: data.team, manager_id: data.managerId, active: data.active, updated_by: context.userId }).eq("user_id", data.userId);
   if (error) throw new Error("Não foi possível atualizar esta pessoa.");
   if (!data.active) await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "876000h" });
   else await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "none" });
-  await supabaseAdmin.from("access_audit").insert({ actor_id: context.userId, target_user_id: data.userId, action: existingRole ? "USER_UPDATED" : "ACCESS_APPROVED", details: { role: data.role, active: data.active } });
+  await supabaseAdmin.from("access_audit").insert({ actor_id: context.userId, target_user_id: data.userId, action: "USER_UPDATED", details: { role: data.role, active: data.active } });
   return { ok: true };
 });

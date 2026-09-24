@@ -41,15 +41,50 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_invites: {
+        Row: {
+          code_hash: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          used_at: string | null
+          used_by: string | null
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          created_by: string
+          expires_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           active: boolean
           avatar_url: string | null
           created_at: string
           created_by: string | null
+          email: string
           full_name: string
           job_title: string
           manager_id: string | null
+          phone: string
           preferences: Json
           team: string
           updated_at: string
@@ -61,9 +96,11 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string
           full_name?: string
           job_title?: string
           manager_id?: string | null
+          phone?: string
           preferences?: Json
           team?: string
           updated_at?: string
@@ -75,9 +112,11 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           created_by?: string | null
+          email?: string
           full_name?: string
           job_title?: string
           manager_id?: string | null
+          phone?: string
           preferences?: Json
           team?: string
           updated_at?: string

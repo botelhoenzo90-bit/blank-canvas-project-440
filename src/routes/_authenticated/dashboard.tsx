@@ -51,8 +51,9 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DabliuApp,
 });
 
-type Role = "Director" | "Master" | "Representative" | "Supervisor" | "Seller";
+type Role = "Presidente/Diretor" | "Super Master" | "Representante" | "Supervisor" | "Vendedor";
 type View = "dashboard" | "sales" | "ranking" | "goals" | "team" | "reports" | "tv";
+const roleKey = (role: Role) => ({ "Presidente/Diretor": "director", "Super Master": "master", Representante: "representative", Supervisor: "supervisor", Vendedor: "seller" } as const)[role];
 
 type Sale = {
   id: string;
@@ -91,7 +92,7 @@ function DabliuApp() {
   const savePushDevice = useServerFn(registerPushDevice);
   const loadAccess = useServerFn(getMyAccess);
 
-  const refreshAccess = async () => { const access = await loadAccess(); setRole(access.role ? ({ director: "Director", master: "Master", representative: "Representative", supervisor: "Supervisor", seller: "Seller" } as const)[access.role] : null); setProfileName(access.profile?.full_name ?? ""); setAccessPending(access.pending); setAccessLoading(false); };
+  const refreshAccess = async () => { const access = await loadAccess(); setRole(access.role ? ({ director: "Presidente/Diretor", master: "Super Master", representative: "Representante", supervisor: "Supervisor", seller: "Vendedor" } as const)[access.role] : null); setProfileName(access.profile?.full_name ?? ""); setAccessPending(access.pending); setAccessLoading(false); };
   useEffect(() => { void refreshAccess().catch(() => setAccessLoading(false)); }, []);
 
   useEffect(() => {
@@ -180,7 +181,7 @@ function DabliuApp() {
           <NavItem icon={<Activity size={18} />} label="Relatórios" active={view === "reports"} onClick={() => navigate("reports")} />
           <div className="nav-divider" />
           <NavItem icon={<MonitorPlay size={18} />} label="Central TV" active={false} onClick={() => { setView("tv"); }} />
-          {role === "Director" && <NavItem icon={<ShieldCheck size={18} />} label="Permissões" active={view === "team"} onClick={() => navigate("team")} />}
+          {role === "Presidente/Diretor" && <NavItem icon={<ShieldCheck size={18} />} label="Permissões" active={view === "team"} onClick={() => navigate("team")} />}
           <NavItem icon={<Settings size={18} />} label="Sair" active={false} onClick={() => void signOut()} />
         </nav>
         <div className="sidebar-bottom"><div className="mini-profile"><div className="avatar">{initials(profileName || "Usuário")}</div><div><strong>{profileName || "Usuário"}</strong><span>{role}</span></div><MoreHorizontal size={18} /></div></div>
@@ -206,7 +207,7 @@ function DabliuApp() {
            {view === "sales" && <SalesView sales={periodSales} search={search} setSearch={setSearch} onAdd={() => setShowSaleModal(true)} />}
            {view === "ranking" && <RankingView sales={periodSales} />}
            {view === "goals" && <GoalsView />}
-          {view === "team" && <PeoplePanel role={role.toLowerCase() as "director" | "master" | "representative" | "supervisor" | "seller"} />}
+           {view === "team" && <PeoplePanel role={roleKey(role)} />}
           {view === "reports" && <ReportsView sales={sales} />}
         </div>
       </main>
@@ -218,7 +219,7 @@ function DabliuApp() {
 }
 
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) { return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}>{icon}<span>{label}</span></button>; }
-function PendingAccess({ name, onExit }: { name: string; onExit: () => Promise<void> }) { return <main className="auth-page"><section className="auth-card pending-card"><img src={logo.url} alt="Dábliu Consórcios" className="auth-logo" /><div className="auth-icon"><ShieldCheck /></div><span className="panel-kicker">SOLICITAÇÃO RECEBIDA</span><h1>Aguardando aprovação</h1><p>{name ? `${name}, seu cadastro foi recebido.` : "Seu cadastro foi recebido."} O Director precisa definir seu perfil, equipe e superior antes da liberação.</p><div className="auth-message">Não é necessário confirmar o e-mail. Entre novamente após receber a aprovação do Director.</div><button className="outline-btn auth-submit" onClick={() => void onExit()}>Sair</button></section></main>; }
+function PendingAccess({ name, onExit }: { name: string; onExit: () => Promise<void> }) { return <main className="auth-page"><section className="auth-card pending-card"><img src={logo.url} alt="Dábliu Consórcios" className="auth-logo" /><div className="auth-icon"><ShieldCheck /></div><span className="panel-kicker">PERFIL INCOMPLETO</span><h1>Não foi possível abrir seu acesso</h1><p>{name ? `${name}, os dados da sua conta estão incompletos.` : "Os dados da sua conta estão incompletos."} Entre em contato com Presidente/Diretor.</p><button className="outline-btn auth-submit" onClick={() => void onExit()}>Sair</button></section></main>; }
 function titleFor(v: View) { return ({ sales: "Vendas", ranking: "Ranking de performance", goals: "Metas e objetivos", team: "Gestão da equipe", reports: "Relatórios" } as Record<string, string>)[v] || "Central de Resultados"; }
 
 function Dashboard({ sales, todayTotal, periodTotal, avgTicket, period }: { sales: Sale[]; todayTotal: number; periodTotal: number; avgTicket: number; period: string }) {
