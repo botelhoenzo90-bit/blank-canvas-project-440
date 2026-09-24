@@ -1,12 +1,11 @@
-:root{--bg:#f4f8f8;--surface:#fff;--surface-2:#f7fbfb;--ink:#101617;--muted:#718083;--line:#e1eaea;--accent:#68d6d0;--accent-strong:#27bdb5;--nav:#101617;--green:#20b486;--red:#e45d69;--blue:#58c8c5}
 body{background:var(--bg);color:var(--ink)}
 .dab-app{background:var(--bg)}
-.dab-sidebar{background:#101617}
+.dab-sidebar{background:var(--nav)}
 .dab-brand-mark,.tv-logo{background:#68d6d0;color:#101617;box-shadow:0 8px 22px rgba(104,214,208,.22)}
-.dab-brand span,.dab-workspace>span{color:#8c9a9b}
-.dab-workspace button{background:#1c2425;color:#e9eeee}
-.nav-item{color:#98a3a5}.nav-item.active{background:rgba(104,214,208,.13)}.nav-item.active svg{color:#68d6d0}
-.dab-header{background:rgba(255,255,255,.95);border-color:#e1eaea}
+.dab-brand span,.dab-workspace>span{color:var(--nav-muted)}
+.dab-workspace button{background:var(--surface-2);color:var(--nav-ink);border-color:var(--line)}
+.nav-item{color:var(--nav-muted)}.nav-item:hover{color:var(--nav-ink);background:var(--surface-2)}.nav-item.active{background:rgba(104,214,208,.16);color:var(--nav-ink)}.nav-item.active svg{color:#27bdb5}
+.dab-header{background:var(--surface);border-color:var(--line)}
 .periods{background:#e5eeee}.primary-btn{background:#68d6d0;border-color:#27bdb5;color:#10201f;box-shadow:0 5px 15px rgba(39,189,181,.16)}.primary-btn:hover{background:#7ce0db}
 .text-btn{color:#168f89}.eyebrow{color:#65d1cb}
 .welcome-strip{background:linear-gradient(110deg,#101617,#202829)}.welcome-strip:after{border-color:rgba(104,214,208,.14)}

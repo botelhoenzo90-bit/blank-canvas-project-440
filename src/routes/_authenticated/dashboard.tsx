@@ -32,8 +32,9 @@ import { Toaster, toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
 import { enablePushNotifications } from "@/lib/push";
-import { claimFirstDirector, getMyAccess } from "@/lib/auth.functions";
+import { getMyAccess } from "@/lib/auth.functions";
 import { PeoplePanel } from "@/components/people-panel";
+import { ThemeToggle } from "@/components/theme-toggle";
 import logo from "@/assets/dabliu-logo.png.asset.json";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -96,7 +97,6 @@ function DabliuApp() {
   const createSale = useServerFn(createSaleAndNotify);
   const savePushDevice = useServerFn(registerPushDevice);
   const loadAccess = useServerFn(getMyAccess);
-  const finishSetup = useServerFn(claimFirstDirector);
 
   const refreshAccess = async () => { const access = await loadAccess(); setRole(access.role ? ({ director: "Director", master: "Master", representative: "Representative", supervisor: "Supervisor", seller: "Seller" } as const)[access.role] : null); setProfileName(access.profile?.full_name ?? ""); setAccessPending(access.pending); setAccessLoading(false); };
   useEffect(() => { void refreshAccess().catch(() => setAccessLoading(false)); }, []);
@@ -161,7 +161,7 @@ function DabliuApp() {
 
   if (accessLoading) return <div className="auth-page"><div className="auth-card"><img src={logo.url} alt="Dábliu Consórcios" className="auth-logo" /><p>Carregando seu acesso...</p></div></div>;
   if (accessPending) return <PendingAccess name={profileName} onExit={signOut} />;
-  if (!role) return <InitialSetup name={profileName} onSetup={async (fullName) => { await finishSetup({ data: { fullName } }); await refreshAccess(); }} />;
+  if (!role) return <PendingAccess name={profileName} onExit={signOut} />;
 
   if (tvMode || view === "tv") {
     return <TvPanel sales={sales} announcement={tvAnnouncement} onExit={() => { setTvMode(false); setView("dashboard"); }} />;
@@ -193,6 +193,7 @@ function DabliuApp() {
           <div><div className="breadcrumb">Dábliu <span>/</span> {view === "dashboard" ? "Visão geral" : view}</div><h1>{view === "dashboard" ? `Olá, ${profileName.split(" ")[0] || "Usuário"}` : titleFor(view)}</h1></div>
           <div className="header-actions">
              <div className="role-select"><ShieldCheck size={15} /><strong>{role}</strong></div>
+             <ThemeToggle />
              <button className="icon-btn" aria-label="Notificações" onClick={() => setShowNotifications((v) => !v)}><Bell size={19} /></button>
              <button className="avatar header-avatar" onClick={() => void signOut()} title="Sair">{initials(profileName || "Usuário")}</button>
           </div>
@@ -218,7 +219,6 @@ function DabliuApp() {
 }
 
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) { return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}>{icon}<span>{label}</span></button>; }
-function InitialSetup({ name, onSetup }: { name: string; onSetup: (name: string) => Promise<void> }) { const [fullName, setFullName] = useState(name); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const submit = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); try { await onSetup(fullName); } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível concluir a configuração."); } finally { setBusy(false); } }; return <main className="auth-page"><section className="auth-card"><img src={logo.url} alt="Dábliu Consórcios" className="auth-logo" /><span className="panel-kicker">PRIMEIRO ACESSO</span><h1>Concluir configuração</h1><p>Esta será a conta Director responsável por administrar toda a operação.</p><form onSubmit={submit}><label>Nome completo<input value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={3} /></label>{message && <div className="auth-message">{message}</div>}<button className="primary-btn auth-submit" disabled={busy}>{busy ? "Configurando..." : "Concluir como Director"}</button></form></section></main>; }
 function PendingAccess({ name, onExit }: { name: string; onExit: () => Promise<void> }) { return <main className="auth-page"><section className="auth-card pending-card"><img src={logo.url} alt="Dábliu Consórcios" className="auth-logo" /><div className="auth-icon"><ShieldCheck /></div><span className="panel-kicker">SOLICITAÇÃO RECEBIDA</span><h1>Aguardando aprovação</h1><p>{name ? `${name}, seu cadastro foi recebido.` : "Seu cadastro foi recebido."} O Director precisa definir seu perfil, equipe e superior antes da liberação.</p><div className="auth-message">Não é necessário confirmar o e-mail. Entre novamente após receber a aprovação do Director.</div><button className="outline-btn auth-submit" onClick={() => void onExit()}>Sair</button></section></main>; }
 function Notification({ text, time }: { text: string; time: string }) { return <div className="notification"><div className="notif-icon"><Zap size={14} /></div><div><p>{text}</p><small>{time}</small></div></div>; }
 function titleFor(v: View) { return ({ sales: "Vendas", ranking: "Ranking de performance", goals: "Metas e objetivos", team: "Gestão da equipe", reports: "Relatórios" } as Record<string, string>)[v] || "Central de Resultados"; }
