@@ -168,13 +168,21 @@ export type Database = {
       }
       sales: {
         Row: {
+          administrator: string
           created_at: string
+          credit_value: number | null
+          group_number: string
           id: string
+          lead_source: string
           master: string
+          notes: string
           owner_id: string | null
+          payment_method: string
+          quota_number: string
           representative: string
           sale_date: string
           sale_time: string
+          sale_type: string
           seller: string
           status: string
           supervisor: string
@@ -183,13 +191,21 @@ export type Database = {
           value: number
         }
         Insert: {
+          administrator?: string
           created_at?: string
+          credit_value?: number | null
+          group_number?: string
           id?: string
+          lead_source?: string
           master: string
+          notes?: string
           owner_id?: string | null
+          payment_method?: string
+          quota_number?: string
           representative: string
           sale_date?: string
           sale_time?: string
+          sale_type?: string
           seller: string
           status?: string
           supervisor: string
@@ -198,13 +214,21 @@ export type Database = {
           value: number
         }
         Update: {
+          administrator?: string
           created_at?: string
+          credit_value?: number | null
+          group_number?: string
           id?: string
+          lead_source?: string
           master?: string
+          notes?: string
           owner_id?: string | null
+          payment_method?: string
+          quota_number?: string
           representative?: string
           sale_date?: string
           sale_time?: string
+          sale_type?: string
           seller?: string
           status?: string
           supervisor?: string
