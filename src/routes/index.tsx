@@ -8,7 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import logo from "@/assets/dabliu-logo.png.asset.json";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "Entrar | Dábliu Consórcios" }, { name: "description", content: "Acesso seguro à Central de Resultados Dábliu Consórcios." }, { property: "og:title", content: "Central de Resultados | Dábliu Consórcios" }, { property: "og:description", content: "Acesso seguro à operação comercial Dábliu." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
+  head: () => ({ meta: [{ title: "Entrar | Dábliu Consórcios" }, { name: "description", content: "Acesso seguro à Central de Resultados Dábliu Consórcios." }, { property: "og:title", content: "Central de Resultados | Dábliu Consórcios" }, { property: "og:description", content: "Acesso seguro à operação comercial Dábliu." }, { property: "og:type", content: "website" }, { property: "og:image", content: "https://comercialdabliuconsorcios.lovable.app/__l5e/assets-v1/10f4a8ff-d9be-4747-8a78-befda610e55e/dabliu-share.png" }, { name: "twitter:card", content: "summary_large_image" }, { name: "twitter:image", content: "https://comercialdabliuconsorcios.lovable.app/__l5e/assets-v1/10f4a8ff-d9be-4747-8a78-befda610e55e/dabliu-share.png" }] }),
   component: LoginPage,
 });
 
