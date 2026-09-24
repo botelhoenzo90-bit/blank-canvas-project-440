@@ -18,8 +18,10 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  Share2,
   Settings,
   ShieldCheck,
+  Smartphone,
   Target,
   Trophy,
   Users,
@@ -197,7 +199,7 @@ function DabliuApp() {
              <button className="icon-btn" aria-label="Notificações" onClick={() => setShowNotifications((v) => !v)}><Bell size={19} /></button>
              <button className="avatar header-avatar" onClick={() => void signOut()} title="Sair">{initials(profileName || "Usuário")}</button>
           </div>
-           {showNotifications && <div className="notifications"><div className="notif-head"><strong>Notificações no celular</strong><button onClick={() => setShowNotifications(false)}><X size={16} /></button></div><div className="push-panel"><Bell size={20} /><p>Receba uma notificação sempre que uma venda for confirmada.</p><button className="primary-btn" onClick={() => void activateNotifications()}>Ativar notificações</button><small>No iPhone, adicione o Dábliu à Tela de Início primeiro.</small></div></div>}
+           {showNotifications && <div className="notifications"><div className="notif-head"><div><strong>Instalar no celular</strong><span>Faça uma vez para receber as vendas.</span></div><button aria-label="Fechar instruções" onClick={() => setShowNotifications(false)}><X size={16} /></button></div><div className="push-panel"><div className="install-guide"><section><div className="guide-title"><Share2 size={16} /><strong>iPhone</strong><span>Safari</span></div><ol><li>Abra o sistema no <strong>Safari</strong>.</li><li>Toque em <strong>Compartilhar</strong>.</li><li>Escolha <strong>Adicionar à Tela de Início</strong>.</li><li>Abra pelo ícone Dábliu e toque abaixo.</li></ol></section><section><div className="guide-title"><Smartphone size={16} /><strong>Android</strong><span>Chrome</span></div><ol><li>Abra o sistema no <strong>Chrome</strong>.</li><li>Toque no menu de três pontos.</li><li>Escolha <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong>.</li><li>Abra pelo ícone Dábliu e toque abaixo.</li></ol></section></div><button className="primary-btn" onClick={() => void activateNotifications()}><Bell size={16} /> Ativar notificações</button><small>Quando o celular perguntar, escolha <strong>Permitir</strong>.</small></div></div>}
         </header>
 
         <div className="content">
