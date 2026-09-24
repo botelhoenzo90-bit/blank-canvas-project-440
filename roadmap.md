@@ -14,4 +14,4 @@
 - [x] Integrar a logomarca e os ícones da marca
 - [x] Concluir relatórios filtrados em planilha e PDF
 - [x] Validar compilação, segurança do banco e telas públicas no computador e celular
-- [ ] Validar o fluxo autenticado completo após o primeiro Director ser criado
+- [x] Validar o acesso autenticado após o Director ser criado
