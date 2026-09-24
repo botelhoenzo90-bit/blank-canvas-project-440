@@ -6,6 +6,8 @@
 - [x] Concluir a configuração Web Push no Firebase
 - [x] Criar login, cadastro inicial e recuperação de senha
 - [x] Cadastro sem confirmação de e-mail, com aprovação pelo Director
+- [x] Remover a configuração pública do primeiro Director
+- [x] Aplicar tema branco padrão com opção de modo escuro
 - [x] Aplicar perfis completos e permissões por hierarquia
 - [x] Proteger vendas, aparelhos e administração no Supabase
 - [x] Remover exemplos visuais preservando vendas reais
