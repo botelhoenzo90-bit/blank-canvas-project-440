@@ -4,7 +4,7 @@ import { Moon, Sun } from "lucide-react";
 type Theme = "light" | "dark";
 
 function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset["theme"] = theme;
   document.documentElement.style.colorScheme = theme;
   window.localStorage.setItem("dabliu-theme", theme);
 }
