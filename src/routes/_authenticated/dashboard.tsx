@@ -278,7 +278,7 @@ function TvPanel({ sales, announcement, onExit }: { sales: Sale[]; announcement:
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
   const todaySales = sales.filter((s) => s.date === today);
   return <div className="tv-screen">
-    <div className="tv-top"><div className="tv-brand"><img src={logo.url} alt="Dábliu Consórcios" /></div><div className="tv-clock"><span>OPERAÇÃO AO VIVO</span><strong>{clock.toLocaleTimeString("pt-BR")}</strong></div><button onClick={onExit}>Sair da TV <X size={16} /></button></div>
+    <div className="tv-top"><div className="tv-brand"><img src={logo.url} alt="Dábliu Consórcios" /></div><div className="tv-clock"><span>OPERAÇÃO AO VIVO</span><strong>{clock.toLocaleTimeString("pt-BR")}</strong></div><ThemeToggle className="tv-theme-toggle" /><button onClick={onExit}>Sair da TV <X size={16} /></button></div>
     {featuredSale ? <section className="sale-celebration" aria-live="assertive">
       <span className="celebration-live"><i /> NOVA VENDA CONFIRMADA</span>
       <div className="celebration-avatar">{initials(featuredSale.seller)}</div>
