@@ -68,12 +68,22 @@ type Sale = {
   date: string;
   time: string;
   status: "Confirmada" | "Pendente";
+  saleType: "Veículos" | "Imóveis" | "Pesados" | "Outro";
+  groupNumber: string;
+  quotaNumber: string;
+  administrator: string;
+  creditValue: number | null;
+  paymentMethod: string;
+  leadSource: string;
+  notes: string;
 };
+
+type SaleInput = Pick<Sale, "value" | "status" | "saleType" | "groupNumber" | "quotaNumber" | "administrator" | "creditValue" | "paymentMethod" | "leadSource" | "notes">;
 
 const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const initials = (name: string) => name.split(" ").map((x) => x[0]).slice(0, 2).join("");
 type SaleRow = import("@/integrations/supabase/types").Database["public"]["Tables"]["sales"]["Row"];
-const saleFromRow = (row: SaleRow): Sale => ({ id: row.id, seller: row.seller, supervisor: row.supervisor, representative: row.representative, master: row.master, team: row.team, value: Number(row.value), date: row.sale_date, time: row.sale_time.slice(0, 5), status: row.status === "Pendente" ? "Pendente" : "Confirmada" });
+const saleFromRow = (row: SaleRow): Sale => ({ id: row.id, seller: row.seller, supervisor: row.supervisor, representative: row.representative, master: row.master, team: row.team, value: Number(row.value), date: row.sale_date, time: row.sale_time.slice(0, 5), status: row.status === "Pendente" ? "Pendente" : "Confirmada", saleType: row.sale_type as Sale["saleType"], groupNumber: row.group_number, quotaNumber: row.quota_number, administrator: row.administrator, creditValue: row.credit_value === null ? null : Number(row.credit_value), paymentMethod: row.payment_method, leadSource: row.lead_source, notes: row.notes });
 
 function DabliuApp() {
   const navigateTo = useNavigate();
@@ -133,7 +143,7 @@ function DabliuApp() {
   const periodTotal = periodSales.reduce((sum, s) => sum + s.value, 0);
   const avgTicket = periodSales.length ? periodTotal / periodSales.length : 0;
 
-  const registerSale = async (sale: Omit<Sale, "id" | "date" | "time">) => {
+  const registerSale = async (sale: SaleInput) => {
     setSavingSale(true);
     try {
       await createSale({ data: sale });
@@ -172,7 +182,7 @@ function DabliuApp() {
   return (
     <div className="dab-app">
       <aside className={`dab-sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="dab-brand"><img src={logo.url} alt="Dábliu Consórcios" /><div><strong>Dábliu</strong><span>Central de Resultados</span></div></div>
+        <div className="dab-brand"><img src={logo.url} alt="Dábliu Consórcios" /></div>
         <div className="dab-workspace"><span>OPERAÇÃO</span><button><span className="live-dot" /> Operação Principal <ChevronDown size={15} /></button></div>
         <nav>
           <NavItem icon={<LayoutDashboard size={18} />} label="Visão geral" active={view === "dashboard"} onClick={() => navigate("dashboard")} />
@@ -242,9 +252,9 @@ function EmptyState({ text }: { text: string }) { return <div className="empty-s
 
 function sellerRanking(sales: Sale[]) { const map = new Map<string, { name: string; value: number; sales: number }>(); sales.forEach((s) => { const old = map.get(s.seller) || { name: s.seller, value: 0, sales: 0 }; old.value += s.value; old.sales += 1; map.set(s.seller, old); }); return [...map.values()].sort((a, b) => b.value - a.value); }
 
-function SalesView({ sales, search, setSearch, onAdd }: { sales: Sale[]; search: string; setSearch: (v: string) => void; onAdd: () => void }) { const filtered = sales.filter((s) => [s.seller, s.supervisor, s.team].join(" ").toLowerCase().includes(search.toLowerCase())); return <section className="panel full-panel"><div className="panel-head"><div><span className="panel-kicker">OPERAÇÃO COMERCIAL</span><h3>Histórico de vendas</h3></div><button className="primary-btn" onClick={onAdd}><Plus size={16} /> Nova venda</button></div><div className="filters"><div className="search"><Search size={17} /><input placeholder="Buscar vendedor ou equipe" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>{filtered.length ? <DataTable sales={filtered} /> : <EmptyState text="Nenhuma venda encontrada neste período." />}</section>; }
+function SalesView({ sales, search, setSearch, onAdd }: { sales: Sale[]; search: string; setSearch: (v: string) => void; onAdd: () => void }) { const filtered = sales.filter((s) => [s.seller, s.supervisor, s.team, s.saleType, s.administrator, s.leadSource].join(" ").toLowerCase().includes(search.toLowerCase())); return <section className="panel full-panel"><div className="panel-head"><div><span className="panel-kicker">OPERAÇÃO COMERCIAL</span><h3>Histórico de vendas</h3></div><button className="primary-btn" onClick={onAdd}><Plus size={16} /> Nova venda</button></div><div className="filters"><div className="search"><Search size={17} /><input placeholder="Buscar venda, vendedor ou equipe" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>{filtered.length ? <DataTable sales={filtered} /> : <EmptyState text="Nenhuma venda encontrada neste período." />}</section>; }
 
-function DataTable({ sales }: { sales: Sale[] }) { return <div className="table-wrap"><table><thead><tr><th>VENDEDOR</th><th>SUPERVISOR</th><th>EQUIPE</th><th>DATA / HORA</th><th>VALOR</th><th>STATUS</th><th /></tr></thead><tbody>{sales.map((s) => <tr key={s.id}><td><div className="person-cell"><div className="avatar small">{initials(s.seller)}</div><strong>{s.seller}</strong></div></td><td>{s.supervisor}</td><td><span className="team-pill">{s.team}</span></td><td>{new Date(`${s.date}T${s.time}`).toLocaleDateString("pt-BR")} <small>{s.time}</small></td><td className="table-value">{money(s.value)}</td><td><span className={`status ${s.status === "Confirmada" ? "confirmed" : "pending"}`}><i />{s.status}</span></td><td><button className="row-more"><MoreHorizontal size={17} /></button></td></tr>)}</tbody></table></div>; }
+function DataTable({ sales }: { sales: Sale[] }) { return <div className="table-wrap"><table><thead><tr><th>VENDEDOR</th><th>TIPO / CONSÓRCIO</th><th>SUPERVISOR / EQUIPE</th><th>DATA / HORA</th><th>VALORES</th><th>ORIGEM / PAGAMENTO</th><th>STATUS</th></tr></thead><tbody>{sales.map((s) => <tr key={s.id}><td><div className="person-cell"><div className="avatar small">{initials(s.seller)}</div><strong>{s.seller}</strong></div>{s.notes && <small className="sale-detail">{s.notes}</small>}</td><td><strong className="sale-type">{s.saleType}</strong><small className="sale-detail">{[s.administrator, s.groupNumber && `Grupo ${s.groupNumber}`, s.quotaNumber && `Cota ${s.quotaNumber}`].filter(Boolean).join(" • ") || "—"}</small></td><td>{s.supervisor}<small className="sale-detail">{s.team}</small></td><td>{new Date(`${s.date}T${s.time}`).toLocaleDateString("pt-BR")} <small>{s.time}</small></td><td className="table-value">{money(s.value)}{s.creditValue && <small className="sale-detail">Crédito: {money(s.creditValue)}</small>}</td><td>{s.leadSource || "—"}<small className="sale-detail">{s.paymentMethod || "—"}</small></td><td><span className={`status ${s.status === "Confirmada" ? "confirmed" : "pending"}`}><i />{s.status}</span></td></tr>)}</tbody></table></div>; }
 
 function RankingView({ sales }: { sales: Sale[] }) { const [type, setType] = useState("Vendedores"); const data = type === "Vendedores" ? sellerRanking(sales) : type === "Supervisores" ? hierarchyRanking(sales, "supervisor") : type === "Representantes" ? hierarchyRanking(sales, "representative") : hierarchyRanking(sales, "master"); const topValue = data[0]?.value ?? 1; return <section className="panel full-panel"><div className="ranking-hero"><div><span className="panel-kicker">PERFORMANCE</span><h3>Ranking por resultado</h3><p>Atualizado automaticamente a cada nova venda.</p></div><Trophy size={42} /></div><div className="rank-tabs">{["Vendedores", "Supervisores", "Representantes", "Masters"].map((x) => <button className={type === x ? "active" : ""} key={x} onClick={() => setType(x)}>{x}</button>)}</div>{data.length ? <div className="leaderboard">{data.map((item, i) => <div className="leader-row" key={item.name}><div className={`leader-place place-${i + 1}`}>{i + 1}</div><div className="avatar">{initials(item.name)}</div><div className="leader-person"><strong>{item.name}</strong><span>{"sales" in item ? `${item.sales} vendas` : "Estrutura comercial"}</span></div><div className="leader-bar"><i style={{ width: `${Math.max(12, (item.value / topValue) * 100)}%` }} /></div><strong className="leader-money">{money(item.value)}</strong></div>)}</div> : <EmptyState text="O ranking será formado pelas vendas reais." />}</section>; }
 function hierarchyRanking(sales: Sale[], key: keyof Sale) { const map = new Map<string, { name: string; value: number }>(); sales.forEach((s) => { const name = String(s[key]); const old = map.get(name) || { name, value: 0 }; old.value += s.value; map.set(name, old); }); return [...map.values()].sort((a, b) => b.value - a.value); }

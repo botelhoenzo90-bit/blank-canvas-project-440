@@ -5,6 +5,14 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const saleSchema = z.object({
   value: z.number().positive().max(999999999999),
   status: z.enum(["Confirmada", "Pendente"]),
+  saleType: z.enum(["Veículos", "Imóveis", "Pesados", "Outro"]),
+  groupNumber: z.string().trim().max(40),
+  quotaNumber: z.string().trim().max(40),
+  administrator: z.string().trim().max(120),
+  creditValue: z.number().positive().max(999999999999).nullable(),
+  paymentMethod: z.string().trim().max(80),
+  leadSource: z.string().trim().max(100),
+  notes: z.string().trim().max(1000),
 });
 
 const deviceSchema = z.object({
@@ -55,6 +63,14 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       master: byRole("master"),
       team: owner.team || "—",
       value: data.value,
+      sale_type: data.saleType,
+      group_number: data.groupNumber,
+      quota_number: data.quotaNumber,
+      administrator: data.administrator,
+      credit_value: data.creditValue,
+      payment_method: data.paymentMethod,
+      lead_source: data.leadSource,
+      notes: data.notes,
       sale_date: saleDate,
       sale_time: saleTime,
       status: data.status,

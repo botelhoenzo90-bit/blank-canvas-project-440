@@ -21,3 +21,5 @@
 - [x] Guardar telefone, e-mail e função no perfil de cada pessoa
 - [x] Proteger Presidente/Diretor e Super Master com convite temporário
 - [x] Ensinar a instalar no iPhone e Android para receber notificações
+- [ ] Ampliar o cadastro e a exibição das informações das vendas
+- [ ] Deixar somente a logomarca no topo do sistema
