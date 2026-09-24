@@ -59,6 +59,7 @@ export const requestAccess = createServerFn({ method: "POST" })
       updated_by: created.user.id,
     });
     if (profileError) {
+      if (invite) await supabaseAdmin.from("admin_invites").update({ used_at: null, used_by: null }).eq("id", invite.id).eq("used_by", created.user.id);
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error("Não foi possível salvar seu perfil.");
     }
@@ -69,6 +70,7 @@ export const requestAccess = createServerFn({ method: "POST" })
     });
     if (roleError) {
       await supabaseAdmin.from("profiles").delete().eq("user_id", created.user.id);
+      if (invite) await supabaseAdmin.from("admin_invites").update({ used_at: null, used_by: null }).eq("id", invite.id).eq("used_by", created.user.id);
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error("Não foi possível salvar sua função.");
     }
