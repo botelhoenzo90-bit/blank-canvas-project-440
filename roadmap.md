@@ -15,3 +15,6 @@
 - [x] Concluir relatórios filtrados em planilha e PDF
 - [x] Validar compilação, segurança do banco e telas públicas no computador e celular
 - [x] Validar o acesso autenticado após o Director ser criado
+- [x] Zerar vendas e aparelhos antigos, preservando somente o Director
+- [x] Remover nomes, equipes, metas e percentuais demonstrativos
+- [x] Aplicar tema claro como padrão também na Central TV
