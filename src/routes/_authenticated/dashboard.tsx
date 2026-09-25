@@ -16,6 +16,7 @@ import {
   Menu,
   MonitorPlay,
   MoreHorizontal,
+  LogOut,
   Plus,
   Search,
   Share2,
@@ -33,7 +34,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
 import { enablePushNotifications } from "@/lib/push";
 import { getMyAccess } from "@/lib/auth.functions";
-import { PeoplePanel } from "@/components/people-panel";
+import { PeoplePanel, type Person } from "@/components/people-panel";
+import { listPeople } from "@/lib/people.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import logo from "@/assets/dabliu-logo.png.asset.json";
 
@@ -53,9 +55,9 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DabliuApp,
 });
 
-type Role = "Presidente/Diretor" | "Super Master" | "Representante" | "Supervisor" | "Vendedor";
+type Role = "Presidente/Diretor" | "Super Master" | "Master" | "Representante" | "Supervisor" | "Vendedor";
 type View = "dashboard" | "sales" | "ranking" | "goals" | "team" | "reports" | "tv";
-const roleKey = (role: Role) => ({ "Presidente/Diretor": "director", "Super Master": "master", Representante: "representative", Supervisor: "supervisor", Vendedor: "seller" } as const)[role];
+const roleKey = (role: Role) => ({ "Presidente/Diretor": "director", "Super Master": "super_master", Master: "master", Representante: "representative", Supervisor: "supervisor", Vendedor: "seller" } as const)[role];
 
 type Sale = {
   id: string;
@@ -63,6 +65,7 @@ type Sale = {
   supervisor: string;
   representative: string;
   master: string;
+  superMaster: string;
   team: string;
   value: number;
   date: string;
@@ -70,7 +73,8 @@ type Sale = {
   status: "Confirmada" | "Pendente";
   saleType: "Veículos" | "Imóveis" | "Pesados" | "Outro";
   groupNumber: string;
-  quotaNumber: string;
+  sellerCompany: string;
+  buyerName: string;
   administrator: string;
   creditValue: number | null;
   paymentMethod: string;
@@ -78,18 +82,19 @@ type Sale = {
   notes: string;
 };
 
-type SaleInput = Pick<Sale, "value" | "status" | "saleType" | "groupNumber" | "quotaNumber" | "administrator" | "creditValue" | "paymentMethod" | "leadSource" | "notes">;
+type SaleInput = Pick<Sale, "value" | "status" | "saleType" | "groupNumber" | "sellerCompany" | "buyerName" | "administrator" | "creditValue" | "paymentMethod" | "leadSource" | "notes"> & { sellerId: string };
 
 const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const initials = (name: string) => name.split(" ").map((x) => x[0]).slice(0, 2).join("");
 type SaleRow = import("@/integrations/supabase/types").Database["public"]["Tables"]["sales"]["Row"];
-const saleFromRow = (row: SaleRow): Sale => ({ id: row.id, seller: row.seller, supervisor: row.supervisor, representative: row.representative, master: row.master, team: row.team, value: Number(row.value), date: row.sale_date, time: row.sale_time.slice(0, 5), status: row.status === "Pendente" ? "Pendente" : "Confirmada", saleType: row.sale_type as Sale["saleType"], groupNumber: row.group_number, quotaNumber: row.quota_number, administrator: row.administrator, creditValue: row.credit_value === null ? null : Number(row.credit_value), paymentMethod: row.payment_method, leadSource: row.lead_source, notes: row.notes });
+const saleFromRow = (row: SaleRow): Sale => ({ id: row.id, seller: row.seller, supervisor: row.supervisor, representative: row.representative, master: row.master, superMaster: row.super_master, team: row.team, value: Number(row.value), date: row.sale_date, time: row.sale_time.slice(0, 5), status: row.status === "Pendente" ? "Pendente" : "Confirmada", saleType: row.sale_type as Sale["saleType"], groupNumber: row.group_number, sellerCompany: row.seller_company, buyerName: row.buyer_name, administrator: row.administrator, creditValue: row.credit_value === null ? null : Number(row.credit_value), paymentMethod: row.payment_method, leadSource: row.lead_source, notes: row.notes });
 
 function DabliuApp() {
   const navigateTo = useNavigate();
   const [view, setView] = useState<View>("dashboard");
   const [role, setRole] = useState<Role | null>(null);
   const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState(""); const [profilePhone, setProfilePhone] = useState("");
   const [accessLoading, setAccessLoading] = useState(true); const [accessPending, setAccessPending] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
   const [period, setPeriod] = useState("Hoje");
@@ -97,15 +102,19 @@ function DabliuApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [people, setPeople] = useState<Person[]>([]);
   const [tvMode, setTvMode] = useState(false);
   const [tvAnnouncement, setTvAnnouncement] = useState<Sale | null>(null);
   const [savingSale, setSavingSale] = useState(false);
   const createSale = useServerFn(createSaleAndNotify);
   const savePushDevice = useServerFn(registerPushDevice);
   const loadAccess = useServerFn(getMyAccess);
+  const loadPeople = useServerFn(listPeople);
 
-  const refreshAccess = async () => { const access = await loadAccess(); setRole(access.role ? ({ director: "Presidente/Diretor", master: "Super Master", representative: "Representante", supervisor: "Supervisor", seller: "Vendedor" } as const)[access.role] : null); setProfileName(access.profile?.full_name ?? ""); setAccessPending(access.pending); setAccessLoading(false); };
+  const refreshAccess = async () => { const access = await loadAccess(); const nextRole = access.role ? ({ director: "Presidente/Diretor", super_master: "Super Master", master: "Master", representative: "Representante", supervisor: "Supervisor", seller: "Vendedor" } as const)[access.role] : null; setRole(nextRole); if (nextRole === "Vendedor") setView("sales"); setProfileName(access.profile?.full_name ?? ""); setProfileEmail(access.profile?.email ?? ""); setProfilePhone(access.profile?.phone ?? ""); setAccessPending(access.pending); setAccessLoading(false); };
   useEffect(() => { void refreshAccess().catch(() => setAccessLoading(false)); }, []);
+  useEffect(() => { if (role && role !== "Vendedor") void loadPeople().then((items) => setPeople(items as Person[])).catch(() => setPeople([])); }, [role]);
 
   useEffect(() => {
     let active = true;
@@ -174,6 +183,8 @@ function DabliuApp() {
   if (accessLoading) return <div className="auth-page"><div className="auth-card"><img src={logo.url} alt="Dábliu Consórcios" className="auth-logo" /><p>Carregando seu acesso...</p></div></div>;
   if (accessPending) return <PendingAccess name={profileName} onExit={signOut} />;
   if (!role) return <PendingAccess name={profileName} onExit={signOut} />;
+  const canRegisterSale = role !== "Vendedor";
+  const sellers = people.filter((person) => person.active && person.role === "seller");
 
   if (tvMode || view === "tv") {
     return <TvPanel sales={sales} announcement={tvAnnouncement} onExit={() => { setTvMode(false); setView("dashboard"); }} />;
@@ -185,15 +196,14 @@ function DabliuApp() {
         <div className="dab-brand"><img src={logo.url} alt="Dábliu Consórcios" /></div>
         <div className="dab-workspace"><span>OPERAÇÃO</span><button><span className="live-dot" /> Operação Principal <ChevronDown size={15} /></button></div>
         <nav>
-          <NavItem icon={<LayoutDashboard size={18} />} label="Visão geral" active={view === "dashboard"} onClick={() => navigate("dashboard")} />
+          {role !== "Vendedor" && <NavItem icon={<LayoutDashboard size={18} />} label="Visão geral" active={view === "dashboard"} onClick={() => navigate("dashboard")} />}
           <NavItem icon={<CircleDollarSign size={18} />} label="Vendas" active={view === "sales"} onClick={() => navigate("sales")} />
-          <NavItem icon={<Trophy size={18} />} label="Ranking" active={view === "ranking"} onClick={() => navigate("ranking")} />
+          {role !== "Vendedor" && <NavItem icon={<Trophy size={18} />} label="Ranking" active={view === "ranking"} onClick={() => navigate("ranking")} />}
           <NavItem icon={<Target size={18} />} label="Metas" active={view === "goals"} onClick={() => navigate("goals")} />
-          <NavItem icon={<Users size={18} />} label="Equipe" active={view === "team"} onClick={() => navigate("team")} />
-          <NavItem icon={<Activity size={18} />} label="Relatórios" active={view === "reports"} onClick={() => navigate("reports")} />
-          <div className="nav-divider" />
-          <NavItem icon={<MonitorPlay size={18} />} label="Central TV" active={false} onClick={() => { setView("tv"); }} />
-          {role === "Presidente/Diretor" && <NavItem icon={<ShieldCheck size={18} />} label="Permissões" active={view === "team"} onClick={() => navigate("team")} />}
+          {role !== "Vendedor" && <NavItem icon={<Users size={18} />} label="Equipe e acessos" active={view === "team"} onClick={() => navigate("team")} />}
+          {role !== "Vendedor" && <NavItem icon={<Activity size={18} />} label="Relatórios" active={view === "reports"} onClick={() => navigate("reports")} />}
+          {role !== "Vendedor" && <div className="nav-divider" />}
+          {role !== "Vendedor" && <NavItem icon={<MonitorPlay size={18} />} label="Central TV" active={false} onClick={() => { setView("tv"); }} />}
           <NavItem icon={<Settings size={18} />} label="Sair" active={false} onClick={() => void signOut()} />
         </nav>
         <div className="sidebar-bottom"><div className="mini-profile"><div className="avatar">{initials(profileName || "Usuário")}</div><div><strong>{profileName || "Usuário"}</strong><span>{role}</span></div><MoreHorizontal size={18} /></div></div>
@@ -207,16 +217,17 @@ function DabliuApp() {
              <div className="role-select"><ShieldCheck size={15} /><strong>{role}</strong></div>
              <ThemeToggle />
              <button className="icon-btn" aria-label="Notificações" onClick={() => setShowNotifications((v) => !v)}><Bell size={19} /></button>
-             <button className="avatar header-avatar" onClick={() => void signOut()} title="Sair">{initials(profileName || "Usuário")}</button>
+             <button className="avatar header-avatar" onClick={() => setShowProfile((value) => !value)} title="Abrir perfil">{initials(profileName || "Usuário")}</button>
           </div>
+           {showProfile && <div className="profile-popover"><div className="profile-popover-head"><div className="avatar">{initials(profileName || "Usuário")}</div><div><strong>{profileName || "Usuário"}</strong><span>{role}</span></div><button aria-label="Fechar perfil" onClick={() => setShowProfile(false)}><X size={16} /></button></div><dl><div><dt>E-mail</dt><dd>{profileEmail || "Não informado"}</dd></div><div><dt>Telefone</dt><dd>{profilePhone || "Não informado"}</dd></div></dl><button className="outline-btn profile-signout" onClick={() => void signOut()}><LogOut size={15} /> Sair da conta</button></div>}
            {showNotifications && <div className="notifications"><div className="notif-head"><div><strong>Instalar no celular</strong><span>Faça uma vez para receber as vendas.</span></div><button aria-label="Fechar instruções" onClick={() => setShowNotifications(false)}><X size={16} /></button></div><div className="push-panel"><div className="install-guide"><section><div className="guide-title"><Share2 size={16} /><strong>iPhone</strong><span>Safari</span></div><ol><li>Abra o sistema no <strong>Safari</strong>.</li><li>Toque em <strong>Compartilhar</strong>.</li><li>Escolha <strong>Adicionar à Tela de Início</strong>.</li><li>Abra pelo ícone Dábliu e toque abaixo.</li></ol></section><section><div className="guide-title"><Smartphone size={16} /><strong>Android</strong><span>Chrome</span></div><ol><li>Abra o sistema no <strong>Chrome</strong>.</li><li>Toque no menu de três pontos.</li><li>Escolha <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong>.</li><li>Abra pelo ícone Dábliu e toque abaixo.</li></ol></section></div><button className="primary-btn" onClick={() => void activateNotifications()}><Bell size={16} /> Ativar notificações</button><small>Quando o celular perguntar, escolha <strong>Permitir</strong>.</small></div></div>}
         </header>
 
         <div className="content">
-           <div className="top-toolbar"><div className="periods">{["Hoje", "7 dias", "30 dias", "Tudo"].map((p) => <button className={period === p ? "active" : ""} key={p} onClick={() => setPeriod(p)}>{p}</button>)}</div><div className="toolbar-right"><button className="outline-btn" onClick={() => setTvMode(true)}><MonitorPlay size={16} /> Abrir TV</button><button className="primary-btn" onClick={() => setShowSaleModal(true)}><Plus size={17} /> Registrar venda</button></div></div>
+           <div className="top-toolbar"><div className="periods">{["Hoje", "7 dias", "30 dias", "Tudo"].map((p) => <button className={period === p ? "active" : ""} key={p} onClick={() => setPeriod(p)}>{p}</button>)}</div><div className="toolbar-right"><button className="outline-btn" onClick={() => setTvMode(true)}><MonitorPlay size={16} /> Abrir TV</button>{canRegisterSale && <button className="primary-btn" onClick={() => setShowSaleModal(true)}><Plus size={17} /> Registrar venda</button>}</div></div>
 
            {view === "dashboard" && <Dashboard sales={periodSales} todayTotal={todayTotal} periodTotal={periodTotal} avgTicket={avgTicket} period={period} />}
-           {view === "sales" && <SalesView sales={periodSales} search={search} setSearch={setSearch} onAdd={() => setShowSaleModal(true)} />}
+           {view === "sales" && <SalesView sales={periodSales} search={search} setSearch={setSearch} onAdd={canRegisterSale ? () => setShowSaleModal(true) : undefined} />}
            {view === "ranking" && <RankingView sales={periodSales} />}
            {view === "goals" && <GoalsView />}
            {view === "team" && <PeoplePanel role={roleKey(role)} />}
@@ -224,7 +235,7 @@ function DabliuApp() {
         </div>
       </main>
 
-       {showSaleModal && <SaleModal onClose={() => setShowSaleModal(false)} onSave={registerSale} saving={savingSale} />}
+       {showSaleModal && canRegisterSale && <SaleModal sellers={sellers} onClose={() => setShowSaleModal(false)} onSave={registerSale} saving={savingSale} />}
       <Toaster position="bottom-right" richColors />
     </div>
   );
