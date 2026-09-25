@@ -30,8 +30,8 @@ export const createAccount = createServerFn({ method: "POST" })
     });
     if (error || !created.user) {
       if (error?.message.toLowerCase().includes("already"))
-        throw new Error("Este e-mail já possui uma conta.");
-      throw new Error("Não foi possível criar a conta.");
+        return { ok: false as const, reason: "email_exists" as const };
+      return { ok: false as const, reason: "create_failed" as const };
     }
     const userId = created.user.id;
     const { error: profileError } = await supabaseAdmin.from("profiles").insert({
@@ -46,7 +46,7 @@ export const createAccount = createServerFn({ method: "POST" })
     });
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      throw new Error("Não foi possível salvar seus dados.");
+      return { ok: false as const, reason: "profile_failed" as const };
     }
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
@@ -54,9 +54,9 @@ export const createAccount = createServerFn({ method: "POST" })
     if (roleError) {
       await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      throw new Error("Não foi possível liberar seu acesso.");
+      return { ok: false as const, reason: "role_failed" as const };
     }
-    return { ok: true };
+    return { ok: true as const };
   });
 
 export const getMyAccess = createServerFn({ method: "GET" })
