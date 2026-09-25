@@ -252,10 +252,11 @@ function DabliuApp() {
     start.setDate(start.getDate() - days);
     return sales.filter((sale) => new Date(`${sale.date}T00:00:00`) >= start);
   }, [period, sales]);
-  const todaySales = sales.filter((s) => s.date === today);
+  const todaySales = sales.filter((s) => s.date === today && s.status === "Confirmada");
   const todayTotal = todaySales.reduce((sum, s) => sum + s.value, 0);
-  const periodTotal = periodSales.reduce((sum, s) => sum + s.value, 0);
-  const avgTicket = periodSales.length ? periodTotal / periodSales.length : 0;
+  const confirmedPeriodSales = periodSales.filter((sale) => sale.status === "Confirmada");
+  const periodTotal = confirmedPeriodSales.reduce((sum, s) => sum + s.value, 0);
+  const avgTicket = confirmedPeriodSales.length ? periodTotal / confirmedPeriodSales.length : 0;
 
   const registerSale = async (sale: SaleInput) => {
     setSavingSale(true);
@@ -1415,7 +1416,7 @@ function TvPanel({
               <span>HORA</span>
                <span>EMPRESA</span>
                <span>CIDADE</span>
-              <span>EQUIPE</span>
+               <span>SUPERVISOR</span>
               <span>VALOR</span>
               <span>STATUS</span>
             </div>
