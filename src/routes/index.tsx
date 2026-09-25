@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, BarChart3, BellRing, LockKeyhole } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { createAccount } from "@/lib/auth.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import logo from "@/assets/dabliu-logo.png.asset.json";
 
@@ -31,7 +33,8 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"login" | "forgot">("login");
+  const signup = useServerFn(createAccount);
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,6 +48,33 @@ function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setMessage("");
+    if (mode === "signup") {
+      const form = new FormData(e.currentTarget as HTMLFormElement);
+      try {
+        await signup({
+          data: {
+            fullName: String(form.get("fullName")),
+            phone: String(form.get("phone")),
+            email,
+            password,
+            team: String(form.get("team")),
+            role: String(form.get("role")) as
+              | "director"
+              | "master"
+              | "representative"
+              | "supervisor",
+          },
+        });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        void navigate({ to: "/dashboard", replace: true });
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Não foi possível criar a conta.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (mode === "forgot") {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
@@ -85,13 +115,33 @@ function LoginPage() {
       <section className="auth-card">
         <img src={logo.url} alt="Dábliu Consórcios" className="auth-logo" />
         <span className="panel-kicker">ACESSO SEGURO</span>
-        <h2>{mode === "forgot" ? "Recuperar senha" : "Bem-vindo de volta"}</h2>
+        <h2>
+          {mode === "forgot"
+            ? "Recuperar senha"
+            : mode === "signup"
+              ? "Criar sua conta"
+              : "Bem-vindo de volta"}
+        </h2>
         <p>
           {mode === "forgot"
             ? "Informe seu e-mail para receber o link."
-            : "Entre com o acesso criado pelo seu gestor."}
+            : mode === "signup"
+              ? "Preencha seus dados e escolha sua função."
+              : "Entre com seu e-mail e senha."}
         </p>
         <form onSubmit={submit}>
+          {mode === "signup" && (
+            <>
+              <label>
+                Nome completo
+                <input name="fullName" minLength={3} maxLength={120} autoComplete="name" required />
+              </label>
+              <label>
+                Telefone
+                <input name="phone" type="tel" minLength={10} maxLength={20} autoComplete="tel" required />
+              </label>
+            </>
+          )}
           <label>
             E-mail
             <input
@@ -104,18 +154,37 @@ function LoginPage() {
             />
           </label>
           {mode !== "forgot" && (
-            <label>
-              Senha
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
-                maxLength={72}
-                autoComplete="current-password"
-                required
-              />
-            </label>
+            <>
+              <label>
+                Senha
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={8}
+                  maxLength={72}
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  required
+                />
+              </label>
+              {mode === "signup" && (
+                <>
+                  <label>
+                    Equipe
+                    <input name="team" minLength={2} maxLength={100} required />
+                  </label>
+                  <label>
+                    Função
+                    <select name="role" defaultValue="supervisor" required>
+                      <option value="director">Presidente/Diretor</option>
+                      <option value="master">Master</option>
+                      <option value="representative">Representante</option>
+                      <option value="supervisor">Supervisor</option>
+                    </select>
+                  </label>
+                </>
+              )}
+            </>
           )}
           {message && <div className="auth-message">{message}</div>}
           <button className="primary-btn auth-submit" disabled={busy}>
@@ -123,16 +192,21 @@ function LoginPage() {
               "Aguarde..."
             ) : (
               <>
-                {mode === "forgot" ? "Enviar link" : "Entrar"}
+                {mode === "forgot" ? "Enviar link" : mode === "signup" ? "Criar conta" : "Entrar"}
                 <ArrowRight size={17} />
               </>
             )}
           </button>
         </form>
         {mode === "login" && (
-          <button className="auth-link" onClick={() => setMode("forgot")}>
-            Esqueci minha senha
-          </button>
+          <>
+            <button className="auth-link" onClick={() => setMode("signup")}>
+              Criar conta
+            </button>
+            <button className="auth-link" onClick={() => setMode("forgot")}>
+              Esqueci minha senha
+            </button>
+          </>
         )}
         {mode !== "login" && (
           <button
