@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 const roleSchema = z.enum([
   "director",
@@ -45,7 +47,9 @@ const canCreate: Record<AppRole, AppRole[]> = {
   seller: [],
 };
 
-async function getActorRole(context: { supabase: any; userId: string }): Promise<AppRole> {
+type AuthContext = { supabase: SupabaseClient<Database>; userId: string };
+
+async function getActorRole(context: AuthContext): Promise<AppRole> {
   const { data } = await context.supabase
     .from("user_roles")
     .select("role")
@@ -56,7 +60,7 @@ async function getActorRole(context: { supabase: any; userId: string }): Promise
   return role.data;
 }
 
-async function assertCanManage(context: { supabase: any; userId: string }, targetRole: AppRole) {
+async function assertCanManage(context: AuthContext, targetRole: AppRole) {
   const actorRole = await getActorRole(context);
   if (!canCreate[actorRole].includes(targetRole))
     throw new Error("Seu cargo não pode criar ou alterar este nível de acesso.");
