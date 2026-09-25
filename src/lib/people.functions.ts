@@ -59,11 +59,12 @@ export const createPerson = createServerFn({ method: "POST" }).middleware([requi
     const { data: manager } = await context.supabase.from("profiles").select("user_id").eq("user_id", data.managerId).maybeSingle();
     if (!manager) throw new Error("Selecione um superior da sua estrutura.");
   }
+  const managerId = data.managerId ?? context.userId;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: created, error } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: data.password, email_confirm: true, user_metadata: { full_name: data.fullName, phone: data.phone } });
   if (error || !created.user) throw new Error(error?.message ?? "Não foi possível criar o acesso.");
   const userId = created.user.id;
-  const { error: profileError } = await supabaseAdmin.from("profiles").insert({ user_id: userId, full_name: data.fullName, phone: data.phone, email: data.email, job_title: data.jobTitle, team: data.team, manager_id: data.managerId, active: true, created_by: context.userId, updated_by: context.userId });
+  const { error: profileError } = await supabaseAdmin.from("profiles").insert({ user_id: userId, full_name: data.fullName, phone: data.phone, email: data.email, job_title: data.jobTitle, team: data.team, manager_id: managerId, active: true, created_by: context.userId, updated_by: context.userId });
   if (profileError) { await supabaseAdmin.auth.admin.deleteUser(userId); throw new Error("Não foi possível salvar o perfil."); }
   await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: data.role, assigned_by: context.userId });
   await supabaseAdmin.from("access_audit").insert({ actor_id: context.userId, target_user_id: userId, action: "USER_CREATED", details: { role: data.role } });

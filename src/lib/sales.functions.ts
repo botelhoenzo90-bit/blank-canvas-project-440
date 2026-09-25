@@ -49,7 +49,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
     if (!owner?.active) throw new Error("O acesso deste vendedor está inativo.");
     const chain: Array<{ user_id: string; full_name: string; manager_id: string | null; role?: string }> = [];
     let managerId = owner.manager_id;
-    for (let depth = 0; managerId && depth < 4; depth += 1) {
+    for (let depth = 0; managerId && depth < 6; depth += 1) {
       const { data: manager } = await supabaseAdmin.from("profiles").select("user_id, full_name, manager_id").eq("user_id", managerId).maybeSingle();
       if (!manager) break;
       const { data: managerRole } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", manager.user_id).maybeSingle();
