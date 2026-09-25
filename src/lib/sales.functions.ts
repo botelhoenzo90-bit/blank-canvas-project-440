@@ -9,7 +9,6 @@ const saleSchema = z.object({
   status: z.enum(["Confirmada", "Pendente"]),
   saleType: z.enum(["Veículos", "Imóveis", "Pesados", "Outro"]),
   sellerCompany: z.string().trim().min(2).max(160),
-  buyerName: z.string().trim().min(2).max(160),
 });
 
 const cancelSchema = z.object({ saleId: z.string().uuid() });
@@ -116,7 +115,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
         group_number: "",
         quota_number: "",
         seller_company: data.sellerCompany,
-        buyer_name: data.buyerName,
+        buyer_name: "",
         administrator: "",
         credit_value: null,
         payment_method: "",
