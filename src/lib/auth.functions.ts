@@ -7,7 +7,7 @@ const accessRequestSchema = z.object({
   phone: z.string().trim().min(10).max(20).regex(/^[0-9()+\-\s]+$/),
   email: z.string().trim().toLowerCase().email().max(200),
   password: z.string().min(8).max(72),
-  role: z.enum(["director", "master", "representative", "supervisor", "seller"]),
+  role: z.enum(["director", "super_master", "master", "representative", "supervisor", "seller"]),
 });
 
 export const requestAccess = createServerFn({ method: "POST" })

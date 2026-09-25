@@ -2,21 +2,39 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const roleSchema = z.enum(["director", "master", "representative", "supervisor", "seller"]);
+const roleSchema = z.enum(["director", "super_master", "master", "representative", "supervisor", "seller"]);
 const personSchema = z.object({
   email: z.string().email().max(200), password: z.string().min(8).max(72), fullName: z.string().trim().min(3).max(120),
   phone: z.string().trim().min(10).max(20), role: roleSchema, jobTitle: z.string().trim().max(100), team: z.string().trim().max(100), managerId: z.string().uuid().nullable(),
 });
 const updateSchema = z.object({ userId: z.string().uuid(), fullName: z.string().trim().min(3).max(120), phone: z.string().trim().max(20), role: roleSchema, jobTitle: z.string().trim().max(100), team: z.string().trim().max(100), managerId: z.string().uuid().nullable(), active: z.boolean() });
-const inviteSchema = z.object({ role: z.enum(["director", "master"]), validDays: z.number().int().min(1).max(30) });
+const inviteSchema = z.object({ role: z.enum(["director", "super_master"]), validDays: z.number().int().min(1).max(30) });
 
-async function assertDirector(context: { supabase: any; userId: string }) {
+type AppRole = z.infer<typeof roleSchema>;
+const canCreate: Record<AppRole, AppRole[]> = {
+  director: ["director", "super_master", "master", "representative", "supervisor", "seller"],
+  super_master: ["master", "representative", "supervisor", "seller"],
+  master: ["representative", "supervisor", "seller"],
+  representative: ["supervisor", "seller"],
+  supervisor: ["seller"],
+  seller: [],
+};
+
+async function getActorRole(context: { supabase: any; userId: string }): Promise<AppRole> {
   const { data } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
-  if (data?.role !== "director") throw new Error("Apenas Presidente/Diretor pode administrar pessoas.");
+  const role = roleSchema.safeParse(data?.role);
+  if (!role.success) throw new Error("Seu acesso não permite administrar pessoas.");
+  return role.data;
+}
+
+async function assertCanManage(context: { supabase: any; userId: string }, targetRole: AppRole) {
+  const actorRole = await getActorRole(context);
+  if (!canCreate[actorRole].includes(targetRole)) throw new Error("Seu cargo não pode criar ou alterar este nível de acesso.");
 }
 
 export const createAdminInvite = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input) => inviteSchema.parse(input)).handler(async ({ data, context }) => {
-  await assertDirector(context);
+  const actorRole = await getActorRole(context);
+  if (actorRole !== "director") throw new Error("Apenas Presidente/Diretor pode criar convites administrativos.");
   const code = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "").slice(0, 24).toUpperCase();
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
   const codeHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -36,7 +54,11 @@ export const listPeople = createServerFn({ method: "GET" }).middleware([requireS
 });
 
 export const createPerson = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input) => personSchema.parse(input)).handler(async ({ data, context }) => {
-  await assertDirector(context);
+  await assertCanManage(context, data.role);
+  if (data.managerId) {
+    const { data: manager } = await context.supabase.from("profiles").select("user_id").eq("user_id", data.managerId).maybeSingle();
+    if (!manager) throw new Error("Selecione um superior da sua estrutura.");
+  }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: created, error } = await supabaseAdmin.auth.admin.createUser({ email: data.email, password: data.password, email_confirm: true, user_metadata: { full_name: data.fullName, phone: data.phone } });
   if (error || !created.user) throw new Error(error?.message ?? "Não foi possível criar o acesso.");
@@ -49,7 +71,9 @@ export const createPerson = createServerFn({ method: "POST" }).middleware([requi
 });
 
 export const updatePerson = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input) => updateSchema.parse(input)).handler(async ({ data, context }) => {
-  await assertDirector(context);
+  await assertCanManage(context, data.role);
+  const { data: visibleTarget } = await context.supabase.from("profiles").select("user_id").eq("user_id", data.userId).maybeSingle();
+  if (!visibleTarget || data.userId === context.userId) throw new Error("Você não pode alterar este acesso.");
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: existingRole } = await supabaseAdmin.from("user_roles").select("id").eq("user_id", data.userId).maybeSingle();
   const roleResult = existingRole

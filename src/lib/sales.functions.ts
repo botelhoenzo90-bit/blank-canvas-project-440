@@ -3,11 +3,13 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const saleSchema = z.object({
+  sellerId: z.string().uuid(),
   value: z.number().positive().max(999999999999),
   status: z.enum(["Confirmada", "Pendente"]),
   saleType: z.enum(["Veículos", "Imóveis", "Pesados", "Outro"]),
   groupNumber: z.string().trim().max(40),
-  quotaNumber: z.string().trim().max(40),
+  sellerCompany: z.string().trim().min(2).max(160),
+  buyerName: z.string().trim().min(2).max(160),
   administrator: z.string().trim().max(120),
   creditValue: z.number().positive().max(999999999999).nullable(),
   paymentMethod: z.string().trim().max(80),
@@ -37,8 +39,14 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
   .inputValidator((input) => saleSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: owner } = await supabaseAdmin.from("profiles").select("full_name, team, manager_id, active").eq("user_id", context.userId).single();
-    if (!owner?.active) throw new Error("Seu acesso está inativo.");
+    const { data: actorRoleRow } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle();
+    if (!actorRoleRow || actorRoleRow.role === "seller") throw new Error("Somente Supervisor ou cargos acima podem registrar vendas.");
+    const { data: visibleSeller } = await context.supabase.from("profiles").select("user_id").eq("user_id", data.sellerId).maybeSingle();
+    if (!visibleSeller) throw new Error("Este vendedor não pertence à sua estrutura.");
+    const { data: sellerRole } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", data.sellerId).maybeSingle();
+    if (sellerRole?.role !== "seller") throw new Error("Selecione uma pessoa com o cargo Vendedor.");
+    const { data: owner } = await supabaseAdmin.from("profiles").select("full_name, team, manager_id, active").eq("user_id", data.sellerId).single();
+    if (!owner?.active) throw new Error("O acesso deste vendedor está inativo.");
     const chain: Array<{ user_id: string; full_name: string; manager_id: string | null; role?: string }> = [];
     let managerId = owner.manager_id;
     for (let depth = 0; managerId && depth < 4; depth += 1) {
@@ -61,11 +69,14 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       supervisor: byRole("supervisor"),
       representative: byRole("representative"),
       master: byRole("master"),
+      super_master: byRole("super_master"),
       team: owner.team || "—",
       value: data.value,
       sale_type: data.saleType,
       group_number: data.groupNumber,
-      quota_number: data.quotaNumber,
+      quota_number: "",
+      seller_company: data.sellerCompany,
+      buyer_name: data.buyerName,
       administrator: data.administrator,
       credit_value: data.creditValue,
       payment_method: data.paymentMethod,
@@ -74,7 +85,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       sale_date: saleDate,
       sale_time: saleTime,
       status: data.status,
-      owner_id: context.userId,
+      owner_id: data.sellerId,
     }).select().single();
     if (error || !sale) throw new Error("Não foi possível registrar a venda.");
 
@@ -93,9 +104,9 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
           body: JSON.stringify({
             message: {
               token,
-               notification: { title: "Nova venda confirmada", body: `${owner.full_name} vendeu ${data.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}${owner.team ? ` • ${owner.team}` : ""}` },
+               notification: { title: `Venda Aprovada! (${data.sellerCompany})`, body: `${owner.full_name}\nEquipe: ${owner.team || "Sem equipe"}`, image: "https://comercialdabliuconsorcios.lovable.app/__l5e/assets-v1/65a63a54-4b3e-43cf-81f8-43435e23fa78/dabliu-notification-logo.png" },
               data: { path: "/", saleId: sale.id },
-              webpush: { fcm_options: { link: "/" } },
+               webpush: { notification: { icon: "https://comercialdabliuconsorcios.lovable.app/__l5e/assets-v1/65a63a54-4b3e-43cf-81f8-43435e23fa78/dabliu-notification-logo.png", badge: "https://comercialdabliuconsorcios.lovable.app/__l5e/assets-v1/65a63a54-4b3e-43cf-81f8-43435e23fa78/dabliu-notification-logo.png" }, fcm_options: { link: "/" } },
             },
           }),
         });

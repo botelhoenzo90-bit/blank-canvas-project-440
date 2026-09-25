@@ -25,3 +25,7 @@
 - [x] Deixar somente a logomarca no topo do sistema
 - [x] Liberar o cadastro de todas as funções sem código de convite
 - [x] Adicionar controle de modo escuro diretamente na Central TV
+- [x] Corrigir o perfil do topo sem encerrar a sessão
+- [x] Aplicar hierarquia com Super Master e Master separados
+- [x] Restringir vendas a Supervisor ou cargos acima e selecionar o vendedor
+- [x] Usar a nova logo e o novo texto nas notificações de vendas
