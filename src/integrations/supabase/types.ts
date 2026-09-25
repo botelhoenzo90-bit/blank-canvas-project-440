@@ -169,6 +169,7 @@ export type Database = {
       sales: {
         Row: {
           administrator: string
+          buyer_name: string
           created_at: string
           credit_value: number | null
           group_number: string
@@ -184,7 +185,9 @@ export type Database = {
           sale_time: string
           sale_type: string
           seller: string
+          seller_company: string
           status: string
+          super_master: string
           supervisor: string
           team: string
           updated_at: string
@@ -192,6 +195,7 @@ export type Database = {
         }
         Insert: {
           administrator?: string
+          buyer_name?: string
           created_at?: string
           credit_value?: number | null
           group_number?: string
@@ -207,7 +211,9 @@ export type Database = {
           sale_time?: string
           sale_type?: string
           seller: string
+          seller_company?: string
           status?: string
+          super_master?: string
           supervisor: string
           team: string
           updated_at?: string
@@ -215,6 +221,7 @@ export type Database = {
         }
         Update: {
           administrator?: string
+          buyer_name?: string
           created_at?: string
           credit_value?: number | null
           group_number?: string
@@ -230,7 +237,9 @@ export type Database = {
           sale_time?: string
           sale_type?: string
           seller?: string
+          seller_company?: string
           status?: string
+          super_master?: string
           supervisor?: string
           team?: string
           updated_at?: string
@@ -275,6 +284,7 @@ export type Database = {
     Enums: {
       app_role:
         | "director"
+        | "super_master"
         | "master"
         | "representative"
         | "supervisor"
@@ -408,6 +418,7 @@ export const Constants = {
     Enums: {
       app_role: [
         "director",
+        "super_master",
         "master",
         "representative",
         "supervisor",
