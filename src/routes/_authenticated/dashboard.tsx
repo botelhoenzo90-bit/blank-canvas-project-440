@@ -227,7 +227,7 @@ function DabliuApp() {
            <div className="top-toolbar"><div className="periods">{["Hoje", "7 dias", "30 dias", "Tudo"].map((p) => <button className={period === p ? "active" : ""} key={p} onClick={() => setPeriod(p)}>{p}</button>)}</div><div className="toolbar-right">{role !== "Vendedor" && <button className="outline-btn" onClick={() => setTvMode(true)}><MonitorPlay size={16} /> Abrir TV</button>}{canRegisterSale && <button className="primary-btn" onClick={() => setShowSaleModal(true)}><Plus size={17} /> Registrar venda</button>}</div></div>
 
            {view === "dashboard" && <Dashboard sales={periodSales} todayTotal={todayTotal} periodTotal={periodTotal} avgTicket={avgTicket} period={period} />}
-           {view === "sales" && <SalesView sales={periodSales} search={search} setSearch={setSearch} onAdd={canRegisterSale ? () => setShowSaleModal(true) : undefined} />}
+           {view === "sales" && <SalesView sales={periodSales} search={search} setSearch={setSearch} {...(canRegisterSale ? { onAdd: () => setShowSaleModal(true) } : {})} />}
            {view === "ranking" && <RankingView sales={periodSales} />}
            {view === "goals" && <GoalsView />}
            {view === "team" && <PeoplePanel role={roleKey(role)} />}
