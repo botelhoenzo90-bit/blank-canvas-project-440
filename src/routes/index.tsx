@@ -51,7 +51,7 @@ function LoginPage() {
     if (mode === "signup") {
       const form = new FormData(e.currentTarget as HTMLFormElement);
       try {
-        await signup({
+        const result = await signup({
           data: {
             fullName: String(form.get("fullName")),
             phone: String(form.get("phone")),
@@ -65,6 +65,15 @@ function LoginPage() {
               | "supervisor",
           },
         });
+        if (!result.ok) {
+          if (result.reason === "email_exists") {
+            setMessage("Este e-mail já possui uma conta. Entre com sua senha ou recupere o acesso.");
+          } else {
+            setMessage("Não foi possível criar a conta. Tente novamente.");
+          }
+          setBusy(false);
+          return;
+        }
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         void navigate({ to: "/dashboard", replace: true });
