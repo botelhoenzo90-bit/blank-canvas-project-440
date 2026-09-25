@@ -98,7 +98,6 @@ type Sale = {
   saleType: "Veículos" | "Imóveis" | "Pesados" | "Outro";
   groupNumber: string;
   sellerCompany: string;
-  buyerName: string;
   administrator: string;
   creditValue: number | null;
   paymentMethod: string;
@@ -112,7 +111,6 @@ type SaleInput = Pick<
   | "status"
   | "saleType"
   | "sellerCompany"
-  | "buyerName"
   | "city"
 > & { sellerId: string };
 
@@ -143,7 +141,6 @@ const saleFromRow = (row: SaleRow): Sale => ({
   saleType: row.sale_type as Sale["saleType"],
   groupNumber: row.group_number,
   sellerCompany: row.seller_company,
-  buyerName: row.buyer_name,
   administrator: row.administrator,
   creditValue: row.credit_value === null ? null : Number(row.credit_value),
   paymentMethod: row.payment_method,
@@ -847,7 +844,6 @@ function SalesView({
     [
       s.seller,
       s.sellerCompany,
-      s.buyerName,
       s.supervisor,
       s.team,
       s.saleType,
@@ -897,7 +893,7 @@ function DataTable({ sales, onCancel }: { sales: Sale[]; onCancel?: (id: string)
         <thead>
           <tr>
             <th>RESPONSÁVEL / EMPRESA</th>
-            <th>CLIENTE / CONSÓRCIO</th>
+            <th>CONSÓRCIO / CIDADE</th>
             <th>SUPERVISOR / EQUIPE</th>
             <th>DATA / HORA</th>
             <th>VALOR</th>
@@ -916,9 +912,9 @@ function DataTable({ sales, onCancel }: { sales: Sale[]; onCancel?: (id: string)
                 <small className="sale-detail">{s.sellerCompany || "—"}</small>
               </td>
               <td>
-                <strong className="sale-type">{s.buyerName || s.saleType}</strong>
+                <strong className="sale-type">{s.saleType}</strong>
                 <small className="sale-detail">
-                  {s.saleType} • {s.city || "Cidade não informada"}
+                  {s.city || "Cidade não informada"}
                 </small>
               </td>
               <td>
@@ -1095,12 +1091,11 @@ function ReportsView({ sales }: { sales: Sale[] }) {
     `"${String(value ?? "").replaceAll('"', '""')}"`;
   const exportCsv = () => {
     const csv = [
-      "Responsável;Empresa;Cliente;Cidade;Supervisor;Representante;Master;Equipe;Tipo;Valor;Data;Hora;Status",
+      "Responsável;Empresa;Cidade;Supervisor;Representante;Master;Equipe;Tipo;Valor;Data;Hora;Status",
       ...filtered.map((s) =>
         [
           s.seller,
           s.sellerCompany,
-          s.buyerName,
           s.city,
           s.supervisor,
           s.representative,
@@ -1202,9 +1197,23 @@ function SaleModal({
   onSave: (s: SaleInput) => Promise<void>;
   saving: boolean;
 }) {
+  const parseCurrency = (input: string) => {
+    const clean = input.replace(/[^\d,.]/g, "");
+    if (!clean) return 0;
+    if (clean.includes(",")) return Number(clean.replaceAll(".", "").replace(",", "."));
+    const dots = clean.match(/\./g)?.length ?? 0;
+    if (dots > 1) return Number(clean.replaceAll(".", ""));
+    const decimalDigits = clean.split(".")[1]?.length ?? 0;
+    return Number(decimalDigits > 0 && decimalDigits <= 2 ? clean : clean.replaceAll(".", ""));
+  };
+  const formatCurrency = (input: string) => {
+    const amount = parseCurrency(input);
+    return amount > 0
+      ? amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : input;
+  };
   const [sellerId, setSellerId] = useState(sellers[0]?.user_id ?? "");
   const [sellerCompany, setSellerCompany] = useState("");
-  const [buyerName, setBuyerName] = useState("");
   const [value, setValue] = useState("");
   const [saleType, setSaleType] = useState<Sale["saleType"]>("Veículos");
   const [city, setCity] = useState("");
@@ -1214,8 +1223,7 @@ function SaleModal({
     void onSave({
       sellerId,
       sellerCompany,
-      buyerName,
-      value: Number(value),
+      value: parseCurrency(value),
       status: "Confirmada",
       saleType,
       city,
@@ -1262,16 +1270,6 @@ function SaleModal({
             />
           </label>
           <label>
-            Nome do cliente
-            <input
-              value={buyerName}
-              onChange={(e) => setBuyerName(e.target.value)}
-              maxLength={120}
-              placeholder="Nome do cliente"
-              required
-            />
-          </label>
-          <label>
             Equipe
             <input value={selectedSeller?.team || "Sem equipe definida"} readOnly />
           </label>
@@ -1295,12 +1293,12 @@ function SaleModal({
           <label>
             Valor da venda
             <input
-              type="number"
-              min="1"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="0,00"
+              onChange={(e) => setValue(e.target.value.replace(/[^\d,.]/g, ""))}
+              onBlur={() => setValue(formatCurrency(value))}
+              placeholder="35.567,90"
               required
             />
           </label>
@@ -1317,7 +1315,7 @@ function SaleModal({
           </button>
           <button
             className="primary-btn"
-            disabled={saving || !value || !sellerId || !sellerCompany || !buyerName || !city}
+            disabled={saving || parseCurrency(value) <= 0 || !sellerId || !sellerCompany || !city}
           >
             <Check size={16} /> {saving ? "Confirmando..." : "Confirmar venda"}
           </button>
