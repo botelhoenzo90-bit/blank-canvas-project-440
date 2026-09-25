@@ -730,7 +730,7 @@ function Dashboard({
           <div className="panel-head">
             <div>
               <span className="panel-kicker">DESEMPENHO</span>
-              <h3>Ranking de vendedores</h3>
+              <h3>Ranking de responsáveis</h3>
             </div>
           </div>
           {sales.length ? (
@@ -1093,24 +1093,19 @@ function ReportsView({ sales }: { sales: Sale[] }) {
     `"${String(value ?? "").replaceAll('"', '""')}"`;
   const exportCsv = () => {
     const csv = [
-      "Vendedor;Empresa;Cliente;Supervisor;Representante;Master;Super Master;Equipe;Tipo;Administradora;Grupo;Valor;Pagamento;Origem;Observação;Data;Hora;Status",
+      "Responsável;Empresa;Cliente;Cidade;Supervisor;Representante;Master;Equipe;Tipo;Valor;Data;Hora;Status",
       ...filtered.map((s) =>
         [
           s.seller,
           s.sellerCompany,
           s.buyerName,
+          s.city,
           s.supervisor,
           s.representative,
           s.master,
-          s.superMaster,
           s.team,
           s.saleType,
-          s.administrator,
-          s.groupNumber,
           s.value,
-          s.paymentMethod,
-          s.leadSource,
-          s.notes,
           s.date,
           s.time,
           s.status,
@@ -1166,6 +1161,7 @@ function ReportsView({ sales }: { sales: Sale[] }) {
               <option>Todos</option>
               <option>Confirmada</option>
               <option>Pendente</option>
+              <option>Cancelada</option>
             </select>
           </div>
         </div>
@@ -1340,6 +1336,7 @@ function TvPanel({
 }) {
   const [clock, setClock] = useState(new Date());
   const [featuredSale, setFeaturedSale] = useState<Sale | null>(null);
+  const [announcementStage, setAnnouncementStage] = useState<"idle" | "blackout" | "bell" | "sale">("idle");
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(id);
@@ -1347,8 +1344,18 @@ function TvPanel({
   useEffect(() => {
     if (!announcement) return;
     setFeaturedSale(announcement);
-    const id = window.setTimeout(() => setFeaturedSale(null), 15000);
-    return () => window.clearTimeout(id);
+    setAnnouncementStage("blackout");
+    const bellTimer = window.setTimeout(() => setAnnouncementStage("bell"), 5000);
+    const saleTimer = window.setTimeout(() => setAnnouncementStage("sale"), 15000);
+    const endTimer = window.setTimeout(() => {
+      setAnnouncementStage("idle");
+      setFeaturedSale(null);
+    }, 30000);
+    return () => {
+      window.clearTimeout(bellTimer);
+      window.clearTimeout(saleTimer);
+      window.clearTimeout(endTimer);
+    };
   }, [announcement]);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
     new Date(),
@@ -1369,24 +1376,30 @@ function TvPanel({
           Sair da TV <X size={16} />
         </button>
       </div>
-      {featuredSale ? (
+      {featuredSale && announcementStage === "blackout" ? (
+        <section className="tv-alert-stage tv-blackout" aria-live="assertive" />
+      ) : featuredSale && announcementStage === "bell" ? (
+        <section className="tv-alert-stage tv-bell-stage" aria-live="assertive">
+          <Bell size={110} />
+          <strong>NOVA VENDA</strong>
+        </section>
+      ) : featuredSale && announcementStage === "sale" ? (
         <section className="sale-celebration" aria-live="assertive">
           <span className="celebration-live">
             <i /> NOVA VENDA CONFIRMADA
           </span>
-          <div className="celebration-avatar">{initials(featuredSale.seller)}</div>
-          <p>Parabéns,</p>
-          <h1>{featuredSale.seller}</h1>
+          <p>EMPRESA</p>
+          <h1>{featuredSale.sellerCompany}</h1>
           <strong className="celebration-value">{money(featuredSale.value)}</strong>
           <div className="celebration-meta">
-            <span>{featuredSale.saleType}</span>
+            <span>{featuredSale.city}</span>
             <i />
-            <span>{featuredSale.team}</span>
-            <i /> <span>{featuredSale.time}</span>
+            <span>Supervisor: {featuredSale.supervisor}</span>
+            <i /> <span>{featuredSale.team}</span>
           </div>
           <div className="celebration-timer">
             <i />
-            <span>O painel retorna automaticamente em 15 segundos</span>
+              <span>O painel retorna automaticamente em 15 segundos</span>
           </div>
         </section>
       ) : (
@@ -1400,8 +1413,8 @@ function TvPanel({
             </div>
             <div className="board-head">
               <span>HORA</span>
-              <span>VENDEDOR</span>
-              <span>TIPO</span>
+               <span>EMPRESA</span>
+               <span>CIDADE</span>
               <span>EQUIPE</span>
               <span>VALOR</span>
               <span>STATUS</span>
@@ -1411,14 +1424,14 @@ function TvPanel({
                 <div className={`board-row ${i === 0 ? "highlight" : ""}`} key={s.id}>
                   <strong>{s.time}</strong>
                   <span className="board-person">
-                    <b>{initials(s.seller)}</b>
-                    {s.seller}
+                     <b>{initials(s.sellerCompany)}</b>
+                     {s.sellerCompany}
                   </span>
-                  <span>{s.saleType}</span>
-                  <span>{s.team}</span>
+                   <span>{s.city}</span>
+                   <span>{s.supervisor}</span>
                   <strong className="board-money">{money(s.value)}</strong>
                   <span className="board-status">
-                    <i /> CONFIRMADA
+                     <i /> {s.status === "Cancelada" ? "CANCELADA" : "CONFIRMADA"}
                   </span>
                 </div>
               ))
