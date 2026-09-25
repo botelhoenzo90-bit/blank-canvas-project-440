@@ -123,6 +123,18 @@ const money = (n: number) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+const formatCurrencyInput = (input: string) => {
+  const digits = input.replace(/\D/g, "").slice(0, 14);
+  if (!digits) return "";
+  return (Number(digits) / 100).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+const currencyInputToNumber = (input: string) => {
+  const digits = input.replace(/\D/g, "");
+  return digits ? Number(digits) / 100 : 0;
+};
 const initials = (name: string) =>
   name
     .split(" ")
@@ -1202,21 +1214,6 @@ function SaleModal({
   onSave: (s: SaleInput) => Promise<void>;
   saving: boolean;
 }) {
-  const parseCurrency = (input: string) => {
-    const clean = input.replace(/[^\d,.]/g, "");
-    if (!clean) return 0;
-    if (clean.includes(",")) return Number(clean.replaceAll(".", "").replace(",", "."));
-    const dots = clean.match(/\./g)?.length ?? 0;
-    if (dots > 1) return Number(clean.replaceAll(".", ""));
-    const decimalDigits = clean.split(".")[1]?.length ?? 0;
-    return Number(decimalDigits > 0 && decimalDigits <= 2 ? clean : clean.replaceAll(".", ""));
-  };
-  const formatCurrency = (input: string) => {
-    const amount = parseCurrency(input);
-    return amount > 0
-      ? amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : input;
-  };
   const [sellerId, setSellerId] = useState(sellers[0]?.user_id ?? "");
   const [sellerCompany, setSellerCompany] = useState("");
   const [value, setValue] = useState("");
@@ -1228,7 +1225,7 @@ function SaleModal({
     void onSave({
       sellerId,
       sellerCompany,
-      value: parseCurrency(value),
+      value: currencyInputToNumber(value),
       status: "Confirmada",
       saleType,
       city,
@@ -1299,11 +1296,11 @@ function SaleModal({
             Valor da venda
             <input
               type="text"
-              inputMode="decimal"
+              inputMode="numeric"
               value={value}
-              onChange={(e) => setValue(e.target.value.replace(/[^\d,.]/g, ""))}
-              onBlur={() => setValue(formatCurrency(value))}
+              onChange={(e) => setValue(formatCurrencyInput(e.target.value))}
               placeholder="35.567,90"
+              aria-label="Valor da venda em reais"
               required
             />
           </label>
@@ -1320,7 +1317,7 @@ function SaleModal({
           </button>
           <button
             className="primary-btn"
-            disabled={saving || parseCurrency(value) <= 0 || !sellerId || !sellerCompany || !city}
+            disabled={saving || currencyInputToNumber(value) <= 0 || !sellerId || !sellerCompany || !city}
           >
             <Check size={16} /> {saving ? "Confirmando..." : "Confirmar venda"}
           </button>
