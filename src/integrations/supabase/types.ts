@@ -74,6 +74,47 @@ export type Database = {
         }
         Relationships: []
       }
+      goals: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          id: string
+          period_month: string
+          target_role: Database["public"]["Enums"]["app_role"]
+          target_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by: string
+          id?: string
+          period_month: string
+          target_role: Database["public"]["Enums"]["app_role"]
+          target_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          id?: string
+          period_month?: string
+          target_role?: Database["public"]["Enums"]["app_role"]
+          target_user_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           active: boolean
@@ -170,6 +211,7 @@ export type Database = {
         Row: {
           administrator: string
           buyer_name: string
+          city: string
           created_at: string
           credit_value: number | null
           group_number: string
@@ -196,6 +238,7 @@ export type Database = {
         Insert: {
           administrator?: string
           buyer_name?: string
+          city?: string
           created_at?: string
           credit_value?: number | null
           group_number?: string
@@ -222,6 +265,7 @@ export type Database = {
         Update: {
           administrator?: string
           buyer_name?: string
+          city?: string
           created_at?: string
           credit_value?: number | null
           group_number?: string
