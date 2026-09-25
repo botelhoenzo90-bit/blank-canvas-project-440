@@ -5,7 +5,7 @@
 - [x] Persistir vendas e atualizar a Central TV em tempo real entre aparelhos
 - [x] Concluir a configuração Web Push no Firebase
 - [x] Criar login, cadastro inicial e recuperação de senha
-- [x] Cadastro imediato sem confirmação de e-mail ou aprovação
+- [x] Deixar a criação de acessos somente na gestão da hierarquia
 - [x] Remover a configuração pública do primeiro Director
 - [x] Aplicar tema branco padrão com opção de modo escuro
 - [x] Aplicar perfis completos e permissões por hierarquia
@@ -23,5 +23,9 @@
 - [x] Ensinar a instalar no iPhone e Android para receber notificações
 - [x] Ampliar o cadastro e a exibição das informações das vendas
 - [x] Deixar somente a logomarca no topo do sistema
-- [x] Liberar o cadastro de todas as funções sem código de convite
+- [x] Remover o cadastro público e manter o login com acessos criados por gestores
 - [x] Adicionar controle de modo escuro diretamente na Central TV
+- [x] Corrigir o perfil do topo sem encerrar a sessão
+- [x] Aplicar hierarquia com Super Master e Master separados
+- [x] Restringir vendas a Supervisor ou cargos acima e selecionar o vendedor
+- [x] Usar a nova logo e o novo texto nas notificações de vendas

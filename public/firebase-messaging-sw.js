@@ -6,6 +6,6 @@ firebase.messaging();
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const path = event.notification?.data?.FCM_MSG?.data?.path || '/';
+  const path = event.notification?.data?.path || event.notification?.data?.FCM_MSG?.data?.path || '/';
   event.waitUntil(clients.openWindow(path));
 });

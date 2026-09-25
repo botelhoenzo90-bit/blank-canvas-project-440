@@ -3,11 +3,13 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const saleSchema = z.object({
+  sellerId: z.string().uuid(),
   value: z.number().positive().max(999999999999),
   status: z.enum(["Confirmada", "Pendente"]),
   saleType: z.enum(["Veículos", "Imóveis", "Pesados", "Outro"]),
   groupNumber: z.string().trim().max(40),
-  quotaNumber: z.string().trim().max(40),
+  sellerCompany: z.string().trim().min(2).max(160),
+  buyerName: z.string().trim().min(2).max(160),
   administrator: z.string().trim().max(120),
   creditValue: z.number().positive().max(999999999999).nullable(),
   paymentMethod: z.string().trim().max(80),
@@ -25,7 +27,13 @@ export const registerPushDevice = createServerFn({ method: "POST" })
   .inputValidator((input) => deviceSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("push_devices").upsert(
-      { token: data.token, user_id: context.userId, device_label: data.deviceLabel, active: true, last_seen_at: new Date().toISOString() },
+      {
+        token: data.token,
+        user_id: context.userId,
+        device_label: data.deviceLabel,
+        active: true,
+        last_seen_at: new Date().toISOString(),
+      },
       { onConflict: "token" },
     );
     if (error) throw new Error("Não foi possível cadastrar este aparelho.");
@@ -37,75 +45,146 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
   .inputValidator((input) => saleSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: owner } = await supabaseAdmin.from("profiles").select("full_name, team, manager_id, active").eq("user_id", context.userId).single();
-    if (!owner?.active) throw new Error("Seu acesso está inativo.");
-    const chain: Array<{ user_id: string; full_name: string; manager_id: string | null; role?: string }> = [];
+    const { data: actorRoleRow } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!actorRoleRow || actorRoleRow.role === "seller")
+      throw new Error("Somente Supervisor ou cargos acima podem registrar vendas.");
+    const { data: visibleSeller } = await context.supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("user_id", data.sellerId)
+      .maybeSingle();
+    if (!visibleSeller) throw new Error("Este vendedor não pertence à sua estrutura.");
+    const { data: sellerRole } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.sellerId)
+      .maybeSingle();
+    if (sellerRole?.role !== "seller")
+      throw new Error("Selecione uma pessoa com o cargo Vendedor.");
+    const { data: owner } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name, team, manager_id, active")
+      .eq("user_id", data.sellerId)
+      .single();
+    if (!owner?.active) throw new Error("O acesso deste vendedor está inativo.");
+    const chain: Array<{
+      user_id: string;
+      full_name: string;
+      manager_id: string | null;
+      role?: string;
+    }> = [];
     let managerId = owner.manager_id;
-    for (let depth = 0; managerId && depth < 4; depth += 1) {
-      const { data: manager } = await supabaseAdmin.from("profiles").select("user_id, full_name, manager_id").eq("user_id", managerId).maybeSingle();
+    for (let depth = 0; managerId && depth < 6; depth += 1) {
+      const { data: manager } = await supabaseAdmin
+        .from("profiles")
+        .select("user_id, full_name, manager_id")
+        .eq("user_id", managerId)
+        .maybeSingle();
       if (!manager) break;
-      const { data: managerRole } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", manager.user_id).maybeSingle();
-      chain.push({ ...manager, ...(managerRole?.role ? { role: managerRole.role } : {}) }); managerId = manager.manager_id;
+      const { data: managerRole } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", manager.user_id)
+        .maybeSingle();
+      chain.push({ ...manager, ...(managerRole?.role ? { role: managerRole.role } : {}) });
+      managerId = manager.manager_id;
     }
     const byRole = (wanted: string) => chain.find((item) => item.role === wanted)?.full_name ?? "—";
     const now = new Date();
-    const saleDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now);
+    const saleDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
+      now,
+    );
     const saleTime = new Intl.DateTimeFormat("pt-BR", {
       timeZone: "America/Sao_Paulo",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
     }).format(now);
-    const { data: sale, error } = await supabaseAdmin.from("sales").insert({
-      seller: owner.full_name,
-      supervisor: byRole("supervisor"),
-      representative: byRole("representative"),
-      master: byRole("master"),
-      team: owner.team || "—",
-      value: data.value,
-      sale_type: data.saleType,
-      group_number: data.groupNumber,
-      quota_number: data.quotaNumber,
-      administrator: data.administrator,
-      credit_value: data.creditValue,
-      payment_method: data.paymentMethod,
-      lead_source: data.leadSource,
-      notes: data.notes,
-      sale_date: saleDate,
-      sale_time: saleTime,
-      status: data.status,
-      owner_id: context.userId,
-    }).select().single();
+    const { data: sale, error } = await supabaseAdmin
+      .from("sales")
+      .insert({
+        seller: owner.full_name,
+        supervisor: byRole("supervisor"),
+        representative: byRole("representative"),
+        master: byRole("master"),
+        super_master: byRole("super_master"),
+        team: owner.team || "—",
+        value: data.value,
+        sale_type: data.saleType,
+        group_number: data.groupNumber,
+        quota_number: "",
+        seller_company: data.sellerCompany,
+        buyer_name: data.buyerName,
+        administrator: data.administrator,
+        credit_value: data.creditValue,
+        payment_method: data.paymentMethod,
+        lead_source: data.leadSource,
+        notes: data.notes,
+        sale_date: saleDate,
+        sale_time: saleTime,
+        status: data.status,
+        owner_id: data.sellerId,
+      })
+      .select()
+      .single();
     if (error || !sale) throw new Error("Não foi possível registrar a venda.");
 
     const lovableApiKey = process.env["LOVABLE_API_KEY"];
-    const firebaseApiKey = process.env["FIREBASE_MESSAGING_API_KEY_1"] ?? process.env["FIREBASE_MESSAGING_API_KEY"];
+    const firebaseApiKey =
+      process.env["FIREBASE_MESSAGING_API_KEY_1"] ?? process.env["FIREBASE_MESSAGING_API_KEY"];
     if (lovableApiKey && firebaseApiKey && data.status === "Confirmada") {
-      const { data: devices } = await supabaseAdmin.from("push_devices").select("token").eq("active", true);
-      await Promise.allSettled((devices ?? []).map(async ({ token }) => {
-        const response = await fetch("https://connector-gateway.lovable.dev/firebase_messaging/v1/projects/_/messages:send", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${lovableApiKey}`,
-            "X-Connection-Api-Key": firebaseApiKey,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: {
-              token,
-               notification: { title: "Nova venda confirmada", body: `${owner.full_name} vendeu ${data.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}${owner.team ? ` • ${owner.team}` : ""}` },
-              data: { path: "/", saleId: sale.id },
-              webpush: { fcm_options: { link: "/" } },
+      const { data: devices } = await supabaseAdmin
+        .from("push_devices")
+        .select("token")
+        .eq("active", true);
+      await Promise.allSettled(
+        (devices ?? []).map(async ({ token }) => {
+          const response = await fetch(
+            "https://connector-gateway.lovable.dev/firebase_messaging/v1/projects/_/messages:send",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${lovableApiKey}`,
+                "X-Connection-Api-Key": firebaseApiKey,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                message: {
+                  token,
+                  notification: {
+                    title: `Venda Aprovada! (${data.sellerCompany})`,
+                    body: `${owner.full_name}\nEquipe: ${owner.team || "Sem equipe"}`,
+                    image:
+                      "https://comercialdabliuconsorcios.lovable.app/__l5e/assets-v1/65a63a54-4b3e-43cf-81f8-43435e23fa78/dabliu-notification-logo.png",
+                  },
+                  data: { path: "/", saleId: sale.id },
+                  webpush: {
+                    notification: {
+                      icon: "https://comercialdabliuconsorcios.lovable.app/__l5e/assets-v1/65a63a54-4b3e-43cf-81f8-43435e23fa78/dabliu-notification-logo.png",
+                      badge:
+                        "https://comercialdabliuconsorcios.lovable.app/__l5e/assets-v1/65a63a54-4b3e-43cf-81f8-43435e23fa78/dabliu-notification-logo.png",
+                    },
+                    fcm_options: { link: "/" },
+                  },
+                },
+              }),
             },
-          }),
-        });
-        if (response.ok) return;
-        const body = await response.text();
-        console.error(`FCM send failed [${response.status}]: ${body}`);
-        if ((response.status === 404 && body.includes("UNREGISTERED")) || (response.status === 400 && body.includes("INVALID_ARGUMENT"))) {
-          await supabaseAdmin.from("push_devices").delete().eq("token", token);
-        }
-      }));
+          );
+          if (response.ok) return;
+          const body = await response.text();
+          console.error(`FCM send failed [${response.status}]: ${body}`);
+          if (
+            (response.status === 404 && body.includes("UNREGISTERED")) ||
+            (response.status === 400 && body.includes("INVALID_ARGUMENT"))
+          ) {
+            await supabaseAdmin.from("push_devices").delete().eq("token", token);
+          }
+        }),
+      );
     }
 
     return sale;
