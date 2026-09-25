@@ -31,7 +31,8 @@ import {
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
+import { cancelSale, createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
+import { createGoal, listGoals } from "@/lib/goals.functions";
 import { enablePushNotifications } from "@/lib/push";
 import { getMyAccess } from "@/lib/auth.functions";
 import { PeoplePanel, type Person } from "@/components/people-panel";
@@ -69,18 +70,15 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DabliuApp,
 });
 
-type Role =
-  "Presidente/Diretor" | "Super Master" | "Master" | "Representante" | "Supervisor" | "Vendedor";
+type Role = "Presidente/Diretor" | "Master" | "Representante" | "Supervisor";
 type View = "dashboard" | "sales" | "ranking" | "goals" | "team" | "reports" | "tv";
 const roleKey = (role: Role) =>
   (
     ({
       "Presidente/Diretor": "director",
-      "Super Master": "super_master",
       Master: "master",
       Representante: "representative",
       Supervisor: "supervisor",
-      Vendedor: "seller",
     }) as const
   )[role];
 
@@ -92,10 +90,11 @@ type Sale = {
   master: string;
   superMaster: string;
   team: string;
+  city: string;
   value: number;
   date: string;
   time: string;
-  status: "Confirmada" | "Pendente";
+  status: "Confirmada" | "Pendente" | "Cancelada";
   saleType: "Veículos" | "Imóveis" | "Pesados" | "Outro";
   groupNumber: string;
   sellerCompany: string;
@@ -112,15 +111,12 @@ type SaleInput = Pick<
   | "value"
   | "status"
   | "saleType"
-  | "groupNumber"
   | "sellerCompany"
   | "buyerName"
-  | "administrator"
-  | "creditValue"
-  | "paymentMethod"
-  | "leadSource"
-  | "notes"
+  | "city"
 > & { sellerId: string };
+
+type Goal = import("@/integrations/supabase/types").Database["public"]["Tables"]["goals"]["Row"];
 
 const money = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -139,10 +135,11 @@ const saleFromRow = (row: SaleRow): Sale => ({
   master: row.master,
   superMaster: row.super_master,
   team: row.team,
+  city: row.city,
   value: Number(row.value),
   date: row.sale_date,
   time: row.sale_time.slice(0, 5),
-  status: row.status === "Pendente" ? "Pendente" : "Confirmada",
+  status: row.status === "Pendente" ? "Pendente" : row.status === "Cancelada" ? "Cancelada" : "Confirmada",
   saleType: row.sale_type as Sale["saleType"],
   groupNumber: row.group_number,
   sellerCompany: row.seller_company,
@@ -171,30 +168,28 @@ function DabliuApp() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [people, setPeople] = useState<Person[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [tvMode, setTvMode] = useState(false);
   const [tvAnnouncement, setTvAnnouncement] = useState<Sale | null>(null);
   const [savingSale, setSavingSale] = useState(false);
   const createSale = useServerFn(createSaleAndNotify);
+  const cancelSaleRequest = useServerFn(cancelSale);
+  const loadGoals = useServerFn(listGoals);
+  const saveGoal = useServerFn(createGoal);
   const savePushDevice = useServerFn(registerPushDevice);
   const loadAccess = useServerFn(getMyAccess);
   const loadPeople = useServerFn(listPeople);
 
   const refreshAccess = async () => {
     const access = await loadAccess();
-    const nextRole = access.role
-      ? (
-          {
-            director: "Presidente/Diretor",
-            super_master: "Super Master",
-            master: "Master",
-            representative: "Representante",
-            supervisor: "Supervisor",
-            seller: "Vendedor",
-          } as const
-        )[access.role]
-      : null;
+    const roleLabels: Partial<Record<string, Role>> = {
+      director: "Presidente/Diretor",
+      master: "Master",
+      representative: "Representante",
+      supervisor: "Supervisor",
+    };
+    const nextRole = access.role ? roleLabels[access.role] ?? null : null;
     setRole(nextRole);
-    if (nextRole === "Vendedor") setView("sales");
     setProfileName(access.profile?.full_name ?? "");
     setProfileEmail(access.profile?.email ?? "");
     setProfilePhone(access.profile?.phone ?? "");
@@ -205,10 +200,10 @@ function DabliuApp() {
     void refreshAccess().catch(() => setAccessLoading(false));
   }, []);
   useEffect(() => {
-    if (role && role !== "Vendedor")
-      void loadPeople()
-        .then((items) => setPeople(items as Person[]))
-        .catch(() => setPeople([]));
+    if (role) {
+      void loadPeople().then((items) => setPeople(items as Person[])).catch(() => setPeople([]));
+      void loadGoals().then((items) => setGoals(items as Goal[])).catch(() => setGoals([]));
+    }
   }, [role]);
 
   useEffect(() => {
@@ -235,6 +230,10 @@ function DabliuApp() {
           description: `${newSale.seller} • ${money(newSale.value)}`,
         });
       })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sales" }, (payload) => {
+        const updatedSale = saleFromRow(payload.new as SaleRow);
+        setSales((current) => current.map((sale) => sale.id === updatedSale.id ? updatedSale : sale));
+      })
       .subscribe();
     return () => {
       active = false;
@@ -253,10 +252,11 @@ function DabliuApp() {
     start.setDate(start.getDate() - days);
     return sales.filter((sale) => new Date(`${sale.date}T00:00:00`) >= start);
   }, [period, sales]);
-  const todaySales = sales.filter((s) => s.date === today);
+  const todaySales = sales.filter((s) => s.date === today && s.status === "Confirmada");
   const todayTotal = todaySales.reduce((sum, s) => sum + s.value, 0);
-  const periodTotal = periodSales.reduce((sum, s) => sum + s.value, 0);
-  const avgTicket = periodSales.length ? periodTotal / periodSales.length : 0;
+  const confirmedPeriodSales = periodSales.filter((sale) => sale.status === "Confirmada");
+  const periodTotal = confirmedPeriodSales.reduce((sum, s) => sum + s.value, 0);
+  const avgTicket = confirmedPeriodSales.length ? periodTotal / confirmedPeriodSales.length : 0;
 
   const registerSale = async (sale: SaleInput) => {
     setSavingSale(true);
@@ -271,6 +271,22 @@ function DabliuApp() {
     } finally {
       setSavingSale(false);
     }
+  };
+
+  const cancelRegisteredSale = async (saleId: string) => {
+    try {
+      await cancelSaleRequest({ data: { saleId } });
+      setSales((current) => current.map((sale) => sale.id === saleId ? { ...sale, status: "Cancelada" } : sale));
+      toast.success("Venda cancelada");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a venda.");
+    }
+  };
+
+  const registerGoal = async (input: { targetUserId: string; amount: number; periodMonth: string }) => {
+    await saveGoal({ data: input });
+    setGoals((await loadGoals()) as Goal[]);
+    toast.success("Meta cadastrada");
   };
 
   const activateNotifications = async () => {
@@ -320,8 +336,8 @@ function DabliuApp() {
     );
   if (accessPending) return <PendingAccess name={profileName} onExit={signOut} />;
   if (!role) return <PendingAccess name={profileName} onExit={signOut} />;
-  const canRegisterSale = role !== "Vendedor";
-  const sellers = people.filter((person) => person.active && person.role === "seller");
+  const canRegisterSale = true;
+  const saleOwners = people.filter((person) => person.active && person.role !== null);
 
   if (tvMode || view === "tv") {
     return (
@@ -349,53 +365,44 @@ function DabliuApp() {
           </button>
         </div>
         <nav>
-          {role !== "Vendedor" && (
-            <NavItem
+          <NavItem
               icon={<LayoutDashboard size={18} />}
               label="Visão geral"
               active={view === "dashboard"}
               onClick={() => navigate("dashboard")}
             />
-          )}
           <NavItem
             icon={<CircleDollarSign size={18} />}
             label="Vendas"
             active={view === "sales"}
             onClick={() => navigate("sales")}
           />
-          {role !== "Vendedor" && (
-            <NavItem
+          <NavItem
               icon={<Trophy size={18} />}
               label="Ranking"
               active={view === "ranking"}
               onClick={() => navigate("ranking")}
             />
-          )}
           <NavItem
             icon={<Target size={18} />}
             label="Metas"
             active={view === "goals"}
             onClick={() => navigate("goals")}
           />
-          {role !== "Vendedor" && (
-            <NavItem
+          <NavItem
               icon={<Users size={18} />}
               label="Equipe e acessos"
               active={view === "team"}
               onClick={() => navigate("team")}
             />
-          )}
-          {role !== "Vendedor" && (
-            <NavItem
+          <NavItem
               icon={<Activity size={18} />}
               label="Relatórios"
               active={view === "reports"}
               onClick={() => navigate("reports")}
             />
-          )}
-          {role !== "Vendedor" && <div className="nav-divider" />}
-          {role !== "Vendedor" && (
-            <NavItem
+          <div className="nav-divider" />
+          <NavItem
               icon={<MonitorPlay size={18} />}
               label="Central TV"
               active={false}
@@ -403,7 +410,6 @@ function DabliuApp() {
                 setView("tv");
               }}
             />
-          )}
           <NavItem
             icon={<Settings size={18} />}
             label="Sair"
@@ -562,11 +568,9 @@ function DabliuApp() {
               ))}
             </div>
             <div className="toolbar-right">
-              {role !== "Vendedor" && (
-                <button className="outline-btn" onClick={() => setTvMode(true)}>
+              <button className="outline-btn" onClick={() => setTvMode(true)}>
                   <MonitorPlay size={16} /> Abrir TV
                 </button>
-              )}
               {canRegisterSale && (
                 <button className="primary-btn" onClick={() => setShowSaleModal(true)}>
                   <Plus size={17} /> Registrar venda
@@ -589,11 +593,12 @@ function DabliuApp() {
               sales={periodSales}
               search={search}
               setSearch={setSearch}
-              {...(canRegisterSale ? { onAdd: () => setShowSaleModal(true) } : {})}
+              onAdd={() => setShowSaleModal(true)}
+              onCancel={(id) => void cancelRegisteredSale(id)}
             />
           )}
           {view === "ranking" && <RankingView sales={periodSales} />}
-          {view === "goals" && <GoalsView />}
+          {view === "goals" && <GoalsView goals={goals} people={people} role={roleKey(role)} onSave={registerGoal} />}
           {view === "team" && <PeoplePanel role={roleKey(role)} />}
           {view === "reports" && <ReportsView sales={sales} />}
         </div>
@@ -601,7 +606,7 @@ function DabliuApp() {
 
       {showSaleModal && canRegisterSale && (
         <SaleModal
-          sellers={sellers}
+          sellers={saleOwners}
           onClose={() => setShowSaleModal(false)}
           onSave={registerSale}
           saving={savingSale}
@@ -726,7 +731,7 @@ function Dashboard({
           <div className="panel-head">
             <div>
               <span className="panel-kicker">DESEMPENHO</span>
-              <h3>Ranking de vendedores</h3>
+              <h3>Ranking de responsáveis</h3>
             </div>
           </div>
           {sales.length ? (
@@ -816,7 +821,7 @@ function EmptyState({ text }: { text: string }) {
 
 function sellerRanking(sales: Sale[]) {
   const map = new Map<string, { name: string; value: number; sales: number }>();
-  sales.forEach((s) => {
+  sales.filter((sale) => sale.status === "Confirmada").forEach((s) => {
     const old = map.get(s.seller) || { name: s.seller, value: 0, sales: 0 };
     old.value += s.value;
     old.sales += 1;
@@ -830,11 +835,13 @@ function SalesView({
   search,
   setSearch,
   onAdd,
+  onCancel,
 }: {
   sales: Sale[];
   search: string;
   setSearch: (v: string) => void;
   onAdd?: () => void;
+  onCancel: (id: string) => void;
 }) {
   const filtered = sales.filter((s) =>
     [
@@ -875,7 +882,7 @@ function SalesView({
         </div>
       </div>
       {filtered.length ? (
-        <DataTable sales={filtered} />
+        <DataTable sales={filtered} onCancel={onCancel} />
       ) : (
         <EmptyState text="Nenhuma venda encontrada neste período." />
       )}
@@ -883,19 +890,19 @@ function SalesView({
   );
 }
 
-function DataTable({ sales }: { sales: Sale[] }) {
+function DataTable({ sales, onCancel }: { sales: Sale[]; onCancel?: (id: string) => void }) {
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>VENDEDOR / EMPRESA</th>
+            <th>RESPONSÁVEL / EMPRESA</th>
             <th>CLIENTE / CONSÓRCIO</th>
             <th>SUPERVISOR / EQUIPE</th>
             <th>DATA / HORA</th>
             <th>VALOR</th>
-            <th>ORIGEM / PAGAMENTO</th>
             <th>STATUS</th>
+            {onCancel && <th>AÇÃO</th>}
           </tr>
         </thead>
         <tbody>
@@ -911,11 +918,8 @@ function DataTable({ sales }: { sales: Sale[] }) {
               <td>
                 <strong className="sale-type">{s.buyerName || s.saleType}</strong>
                 <small className="sale-detail">
-                  {[s.saleType, s.administrator, s.groupNumber && `Grupo ${s.groupNumber}`]
-                    .filter(Boolean)
-                    .join(" • ") || "—"}
+                  {s.saleType} • {s.city || "Cidade não informada"}
                 </small>
-                {s.notes && <small className="sale-detail">{s.notes}</small>}
               </td>
               <td>
                 {s.supervisor}
@@ -927,15 +931,18 @@ function DataTable({ sales }: { sales: Sale[] }) {
               </td>
               <td className="table-value">{money(s.value)}</td>
               <td>
-                {s.leadSource || "—"}
-                <small className="sale-detail">{s.paymentMethod || "—"}</small>
-              </td>
-              <td>
-                <span className={`status ${s.status === "Confirmada" ? "confirmed" : "pending"}`}>
+                <span className={`status ${s.status === "Confirmada" ? "confirmed" : s.status === "Cancelada" ? "cancelled" : "pending"}`}>
                   <i />
-                  {s.status}
+                  {s.status === "Cancelada" ? "CANCELADA" : `EMPRESA - ${s.sellerCompany}`}
                 </span>
               </td>
+              {onCancel && (
+                <td>
+                  {s.status !== "Cancelada" && (
+                    <button className="ghost-btn danger-btn" onClick={() => onCancel(s.id)}>Cancelar venda</button>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -945,9 +952,9 @@ function DataTable({ sales }: { sales: Sale[] }) {
 }
 
 function RankingView({ sales }: { sales: Sale[] }) {
-  const [type, setType] = useState("Vendedores");
+  const [type, setType] = useState("Responsáveis");
   const data =
-    type === "Vendedores"
+    type === "Responsáveis"
       ? sellerRanking(sales)
       : type === "Supervisores"
         ? hierarchyRanking(sales, "supervisor")
@@ -966,7 +973,7 @@ function RankingView({ sales }: { sales: Sale[] }) {
         <Trophy size={42} />
       </div>
       <div className="rank-tabs">
-        {["Vendedores", "Supervisores", "Representantes", "Masters"].map((x) => (
+        {["Responsáveis", "Supervisores", "Representantes", "Masters"].map((x) => (
           <button className={type === x ? "active" : ""} key={x} onClick={() => setType(x)}>
             {x}
           </button>
@@ -997,7 +1004,7 @@ function RankingView({ sales }: { sales: Sale[] }) {
 }
 function hierarchyRanking(sales: Sale[], key: keyof Sale) {
   const map = new Map<string, { name: string; value: number }>();
-  sales.forEach((s) => {
+  sales.filter((sale) => sale.status === "Confirmada").forEach((s) => {
     const name = String(s[key]);
     const old = map.get(name) || { name, value: 0 };
     old.value += s.value;
@@ -1006,7 +1013,34 @@ function hierarchyRanking(sales: Sale[], key: keyof Sale) {
   return [...map.values()].sort((a, b) => b.value - a.value);
 }
 
-function GoalsView() {
+function GoalsView({ goals, people, role, onSave }: {
+  goals: Goal[];
+  people: Person[];
+  role: "director" | "master" | "representative" | "supervisor";
+  onSave: (input: { targetUserId: string; amount: number; periodMonth: string }) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const eligibleRoles = role === "director" ? ["master", "representative", "supervisor"] : role === "master" ? ["representative", "supervisor"] : role === "representative" ? ["supervisor"] : [];
+  const eligible = people.filter((person) => person.active && person.role && eligibleRoles.includes(person.role));
+  const names = new Map(people.map((person) => [person.user_id, person.full_name]));
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    try {
+      await onSave({
+        targetUserId: String(form.get("targetUserId")),
+        amount: Number(form.get("amount")),
+        periodMonth: `${String(form.get("periodMonth"))}-01`,
+      });
+      setOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cadastrar a meta.");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <section className="panel full-panel">
       <div className="panel-head">
@@ -1014,8 +1048,33 @@ function GoalsView() {
           <span className="panel-kicker">OBJETIVOS</span>
           <h3>Metas comerciais</h3>
         </div>
+        {eligible.length > 0 && <button className="primary-btn" onClick={() => setOpen(true)}><Plus size={16} /> Criar meta</button>}
       </div>
-      <EmptyState text="Nenhuma meta foi cadastrada. Esta tela exibirá apenas metas reais." />
+      {goals.length ? (
+        <div className="goal-grid">
+          {goals.map((goal) => (
+            <article className="panel goal-card" key={goal.id}>
+              <span>{new Date(`${goal.period_month}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span>
+              <h3>{names.get(goal.target_user_id) ?? "Responsável"}</h3>
+              <strong>{money(Number(goal.amount))}</strong>
+              <p>{goal.target_role === "master" ? "Master" : goal.target_role === "representative" ? "Representante" : "Supervisor"}</p>
+            </article>
+          ))}
+        </div>
+      ) : <EmptyState text="Nenhuma meta foi cadastrada." />}
+      {open && (
+        <div className="modal-backdrop">
+          <form className="sale-modal" onSubmit={submit}>
+            <div className="modal-head"><div><span className="panel-kicker">NOVA META</span><h3>Criar meta</h3></div><button type="button" onClick={() => setOpen(false)}><X size={19} /></button></div>
+            <div className="form-grid single">
+              <label>Responsável<select name="targetUserId" required autoFocus><option value="">Selecione</option>{eligible.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}</option>)}</select></label>
+              <label>Mês<input name="periodMonth" type="month" required /></label>
+              <label>Valor da meta<input name="amount" type="number" min="1" step="0.01" required /></label>
+            </div>
+            <div className="modal-actions"><button type="button" className="outline-btn" onClick={() => setOpen(false)}>Cancelar</button><button className="primary-btn" disabled={busy}>{busy ? "Salvando..." : "Salvar meta"}</button></div>
+          </form>
+        </div>
+      )}
     </section>
   );
 }
@@ -1030,29 +1089,25 @@ function ReportsView({ sales }: { sales: Sale[] }) {
       (!end || s.date <= end) &&
       (status === "Todos" || s.status === status),
   );
-  const total = filtered.reduce((a, b) => a + b.value, 0);
+  const confirmed = filtered.filter((sale) => sale.status === "Confirmada");
+  const total = confirmed.reduce((a, b) => a + b.value, 0);
   const csvCell = (value: string | number | null) =>
     `"${String(value ?? "").replaceAll('"', '""')}"`;
   const exportCsv = () => {
     const csv = [
-      "Vendedor;Empresa;Cliente;Supervisor;Representante;Master;Super Master;Equipe;Tipo;Administradora;Grupo;Valor;Pagamento;Origem;Observação;Data;Hora;Status",
+      "Responsável;Empresa;Cliente;Cidade;Supervisor;Representante;Master;Equipe;Tipo;Valor;Data;Hora;Status",
       ...filtered.map((s) =>
         [
           s.seller,
           s.sellerCompany,
           s.buyerName,
+          s.city,
           s.supervisor,
           s.representative,
           s.master,
-          s.superMaster,
           s.team,
           s.saleType,
-          s.administrator,
-          s.groupNumber,
           s.value,
-          s.paymentMethod,
-          s.leadSource,
-          s.notes,
           s.date,
           s.time,
           s.status,
@@ -1108,6 +1163,7 @@ function ReportsView({ sales }: { sales: Sale[] }) {
               <option>Todos</option>
               <option>Confirmada</option>
               <option>Pendente</option>
+              <option>Cancelada</option>
             </select>
           </div>
         </div>
@@ -1122,7 +1178,7 @@ function ReportsView({ sales }: { sales: Sale[] }) {
           </div>
           <div>
             <span>Ticket médio</span>
-            <strong>{money(filtered.length ? total / filtered.length : 0)}</strong>
+            <strong>{money(confirmed.length ? total / confirmed.length : 0)}</strong>
           </div>
           <div>
             <span>Confirmadas</span>
@@ -1151,11 +1207,7 @@ function SaleModal({
   const [buyerName, setBuyerName] = useState("");
   const [value, setValue] = useState("");
   const [saleType, setSaleType] = useState<Sale["saleType"]>("Veículos");
-  const [groupNumber, setGroupNumber] = useState("");
-  const [administrator, setAdministrator] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
-  const [leadSource, setLeadSource] = useState("");
-  const [notes, setNotes] = useState("");
+  const [city, setCity] = useState("");
   const selectedSeller = sellers.find((seller) => seller.user_id === sellerId);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1166,12 +1218,7 @@ function SaleModal({
       value: Number(value),
       status: "Confirmada",
       saleType,
-      groupNumber,
-      administrator,
-      creditValue: null,
-      paymentMethod,
-      leadSource,
-      notes,
+      city,
     });
   };
   return (
@@ -1181,7 +1228,7 @@ function SaleModal({
           <div>
             <span className="panel-kicker">NOVA OPERAÇÃO</span>
             <h3>Registrar venda</h3>
-            <p>Selecione o vendedor; a hierarquia será preenchida automaticamente.</p>
+            <p>Selecione o responsável; a hierarquia será preenchida automaticamente.</p>
           </div>
           <button type="button" onClick={onClose}>
             <X size={19} />
@@ -1189,7 +1236,7 @@ function SaleModal({
         </div>
         <div className="form-grid">
           <label>
-            Vendedor
+            Responsável pela venda
             <select
               value={sellerId}
               onChange={(e) => setSellerId(e.target.value)}
@@ -1229,6 +1276,10 @@ function SaleModal({
             <input value={selectedSeller?.team || "Sem equipe definida"} readOnly />
           </label>
           <label>
+            Cidade
+            <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={120} placeholder="Cidade da venda" required />
+          </label>
+          <label>
             Tipo da venda
             <select
               value={saleType}
@@ -1253,52 +1304,6 @@ function SaleModal({
               required
             />
           </label>
-          <label>
-            Administradora
-            <input
-              value={administrator}
-              onChange={(e) => setAdministrator(e.target.value)}
-              maxLength={120}
-              placeholder="Nome da administradora"
-            />
-          </label>
-          <label>
-            Grupo
-            <input
-              value={groupNumber}
-              onChange={(e) => setGroupNumber(e.target.value)}
-              maxLength={40}
-              placeholder="Número do grupo"
-            />
-          </label>
-          <label>
-            Forma de pagamento
-            <input
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              maxLength={80}
-              placeholder="Ex.: PIX, boleto"
-            />
-          </label>
-          <label>
-            Origem do cliente
-            <input
-              value={leadSource}
-              onChange={(e) => setLeadSource(e.target.value)}
-              maxLength={100}
-              placeholder="Ex.: indicação, Instagram"
-            />
-          </label>
-          <label className="full-field">
-            Observação
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              maxLength={1000}
-              rows={3}
-              placeholder="Informações importantes sobre a venda"
-            />
-          </label>
         </div>
         <div className="modal-note">
           <Zap size={17} />
@@ -1312,7 +1317,7 @@ function SaleModal({
           </button>
           <button
             className="primary-btn"
-            disabled={saving || !value || !sellerId || !sellerCompany || !buyerName}
+            disabled={saving || !value || !sellerId || !sellerCompany || !buyerName || !city}
           >
             <Check size={16} /> {saving ? "Confirmando..." : "Confirmar venda"}
           </button>
@@ -1333,6 +1338,7 @@ function TvPanel({
 }) {
   const [clock, setClock] = useState(new Date());
   const [featuredSale, setFeaturedSale] = useState<Sale | null>(null);
+  const [announcementStage, setAnnouncementStage] = useState<"idle" | "blackout" | "bell" | "sale">("idle");
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(id);
@@ -1340,8 +1346,18 @@ function TvPanel({
   useEffect(() => {
     if (!announcement) return;
     setFeaturedSale(announcement);
-    const id = window.setTimeout(() => setFeaturedSale(null), 15000);
-    return () => window.clearTimeout(id);
+    setAnnouncementStage("blackout");
+    const bellTimer = window.setTimeout(() => setAnnouncementStage("bell"), 5000);
+    const saleTimer = window.setTimeout(() => setAnnouncementStage("sale"), 15000);
+    const endTimer = window.setTimeout(() => {
+      setAnnouncementStage("idle");
+      setFeaturedSale(null);
+    }, 30000);
+    return () => {
+      window.clearTimeout(bellTimer);
+      window.clearTimeout(saleTimer);
+      window.clearTimeout(endTimer);
+    };
   }, [announcement]);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
     new Date(),
@@ -1362,24 +1378,30 @@ function TvPanel({
           Sair da TV <X size={16} />
         </button>
       </div>
-      {featuredSale ? (
+      {featuredSale && announcementStage === "blackout" ? (
+        <section className="tv-alert-stage tv-blackout" aria-live="assertive" />
+      ) : featuredSale && announcementStage === "bell" ? (
+        <section className="tv-alert-stage tv-bell-stage" aria-live="assertive">
+          <Bell size={110} />
+          <strong>NOVA VENDA</strong>
+        </section>
+      ) : featuredSale && announcementStage === "sale" ? (
         <section className="sale-celebration" aria-live="assertive">
           <span className="celebration-live">
             <i /> NOVA VENDA CONFIRMADA
           </span>
-          <div className="celebration-avatar">{initials(featuredSale.seller)}</div>
-          <p>Parabéns,</p>
-          <h1>{featuredSale.seller}</h1>
+          <p>EMPRESA</p>
+          <h1>{featuredSale.sellerCompany}</h1>
           <strong className="celebration-value">{money(featuredSale.value)}</strong>
           <div className="celebration-meta">
-            <span>{featuredSale.saleType}</span>
+            <span>{featuredSale.city}</span>
             <i />
-            <span>{featuredSale.team}</span>
-            <i /> <span>{featuredSale.time}</span>
+            <span>Supervisor: {featuredSale.supervisor}</span>
+            <i /> <span>{featuredSale.team}</span>
           </div>
           <div className="celebration-timer">
             <i />
-            <span>O painel retorna automaticamente em 15 segundos</span>
+              <span>O painel retorna automaticamente em 15 segundos</span>
           </div>
         </section>
       ) : (
@@ -1393,25 +1415,25 @@ function TvPanel({
             </div>
             <div className="board-head">
               <span>HORA</span>
-              <span>VENDEDOR</span>
-              <span>TIPO</span>
-              <span>EQUIPE</span>
+               <span>EMPRESA</span>
+               <span>CIDADE</span>
+               <span>SUPERVISOR</span>
               <span>VALOR</span>
               <span>STATUS</span>
             </div>
             {sales.length ? (
-              sales.slice(0, 7).map((s, i) => (
+              sales.filter((sale) => sale.status === "Confirmada").slice(0, 7).map((s, i) => (
                 <div className={`board-row ${i === 0 ? "highlight" : ""}`} key={s.id}>
                   <strong>{s.time}</strong>
                   <span className="board-person">
-                    <b>{initials(s.seller)}</b>
-                    {s.seller}
+                     <b>{initials(s.sellerCompany)}</b>
+                     {s.sellerCompany}
                   </span>
-                  <span>{s.saleType}</span>
-                  <span>{s.team}</span>
+                   <span>{s.city}</span>
+                   <span>{s.supervisor}</span>
                   <strong className="board-money">{money(s.value)}</strong>
                   <span className="board-status">
-                    <i /> CONFIRMADA
+                     <i /> {s.status === "Cancelada" ? "CANCELADA" : "CONFIRMADA"}
                   </span>
                 </div>
               ))

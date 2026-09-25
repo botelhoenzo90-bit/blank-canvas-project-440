@@ -4,18 +4,15 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const saleSchema = z.object({
   sellerId: z.string().uuid(),
+  city: z.string().trim().min(2).max(120),
   value: z.number().positive().max(999999999999),
   status: z.enum(["Confirmada", "Pendente"]),
   saleType: z.enum(["Veículos", "Imóveis", "Pesados", "Outro"]),
-  groupNumber: z.string().trim().max(40),
   sellerCompany: z.string().trim().min(2).max(160),
   buyerName: z.string().trim().min(2).max(160),
-  administrator: z.string().trim().max(120),
-  creditValue: z.number().positive().max(999999999999).nullable(),
-  paymentMethod: z.string().trim().max(80),
-  leadSource: z.string().trim().max(100),
-  notes: z.string().trim().max(1000),
 });
+
+const cancelSchema = z.object({ saleId: z.string().uuid() });
 
 const deviceSchema = z.object({
   token: z.string().min(20).max(4096),
@@ -50,8 +47,8 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       .select("role")
       .eq("user_id", context.userId)
       .maybeSingle();
-    if (!actorRoleRow || actorRoleRow.role === "seller")
-      throw new Error("Somente Supervisor ou cargos acima podem registrar vendas.");
+    if (!actorRoleRow || !["director", "master", "representative", "supervisor"].includes(actorRoleRow.role))
+      throw new Error("Seu cargo não pode registrar vendas.");
     const { data: visibleSeller } = await context.supabase
       .from("profiles")
       .select("user_id")
@@ -63,8 +60,8 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       .select("role")
       .eq("user_id", data.sellerId)
       .maybeSingle();
-    if (sellerRole?.role !== "seller")
-      throw new Error("Selecione uma pessoa com o cargo Vendedor.");
+    if (!sellerRole || !["director", "master", "representative", "supervisor"].includes(sellerRole.role))
+      throw new Error("Selecione uma pessoa com acesso ativo.");
     const { data: owner } = await supabaseAdmin
       .from("profiles")
       .select("full_name, team, manager_id, active")
@@ -108,22 +105,23 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       .from("sales")
       .insert({
         seller: owner.full_name,
-        supervisor: byRole("supervisor"),
+        supervisor: sellerRole.role === "supervisor" ? owner.full_name : byRole("supervisor"),
         representative: byRole("representative"),
         master: byRole("master"),
-        super_master: byRole("super_master"),
+        super_master: "",
         team: owner.team || "—",
+        city: data.city,
         value: data.value,
         sale_type: data.saleType,
-        group_number: data.groupNumber,
+        group_number: "",
         quota_number: "",
         seller_company: data.sellerCompany,
         buyer_name: data.buyerName,
-        administrator: data.administrator,
-        credit_value: data.creditValue,
-        payment_method: data.paymentMethod,
-        lead_source: data.leadSource,
-        notes: data.notes,
+        administrator: "",
+        credit_value: null,
+        payment_method: "",
+        lead_source: "",
+        notes: "",
         sale_date: saleDate,
         sale_time: saleTime,
         status: data.status,
@@ -188,4 +186,19 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
     }
 
     return sale;
+  });
+
+export const cancelSale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => cancelSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: sale, error } = await context.supabase
+      .from("sales")
+      .update({ status: "Cancelada" })
+      .eq("id", data.saleId)
+      .neq("status", "Cancelada")
+      .select("id")
+      .maybeSingle();
+    if (error || !sale) throw new Error("Não foi possível cancelar esta venda.");
+    return { ok: true };
   });

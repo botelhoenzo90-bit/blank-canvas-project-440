@@ -6,11 +6,9 @@ import type { Database } from "@/integrations/supabase/types";
 
 const roleSchema = z.enum([
   "director",
-  "super_master",
   "master",
   "representative",
   "supervisor",
-  "seller",
 ]);
 const personSchema = z.object({
   email: z.string().email().max(200),
@@ -33,18 +31,16 @@ const updateSchema = z.object({
   active: z.boolean(),
 });
 const inviteSchema = z.object({
-  role: z.enum(["director", "super_master"]),
+  role: z.enum(["director"]),
   validDays: z.number().int().min(1).max(30),
 });
 
 type AppRole = z.infer<typeof roleSchema>;
 const canCreate: Record<AppRole, AppRole[]> = {
-  director: ["director", "super_master", "master", "representative", "supervisor", "seller"],
-  super_master: ["master", "representative", "supervisor", "seller"],
-  master: ["representative", "supervisor", "seller"],
-  representative: ["supervisor", "seller"],
-  supervisor: ["seller"],
-  seller: [],
+  director: ["director", "master", "representative", "supervisor"],
+  master: ["representative", "supervisor"],
+  representative: ["supervisor"],
+  supervisor: [],
 };
 
 type AuthContext = { supabase: SupabaseClient<Database>; userId: string };
