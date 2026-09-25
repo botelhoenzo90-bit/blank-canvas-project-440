@@ -182,16 +182,13 @@ function DabliuApp() {
 
   const refreshAccess = async () => {
     const access = await loadAccess();
-    const nextRole = access.role
-      ? (
-          {
-            director: "Presidente/Diretor",
-            master: "Master",
-            representative: "Representante",
-            supervisor: "Supervisor",
-          } as const
-        )[access.role]
-      : null;
+    const roleLabels: Partial<Record<string, Role>> = {
+      director: "Presidente/Diretor",
+      master: "Master",
+      representative: "Representante",
+      supervisor: "Supervisor",
+    };
+    const nextRole = access.role ? roleLabels[access.role] ?? null : null;
     setRole(nextRole);
     setProfileName(access.profile?.full_name ?? "");
     setProfileEmail(access.profile?.email ?? "");
@@ -837,11 +834,13 @@ function SalesView({
   search,
   setSearch,
   onAdd,
+  onCancel,
 }: {
   sales: Sale[];
   search: string;
   setSearch: (v: string) => void;
   onAdd?: () => void;
+  onCancel: (id: string) => void;
 }) {
   const filtered = sales.filter((s) =>
     [
@@ -882,7 +881,7 @@ function SalesView({
         </div>
       </div>
       {filtered.length ? (
-        <DataTable sales={filtered} />
+        <DataTable sales={filtered} onCancel={onCancel} />
       ) : (
         <EmptyState text="Nenhuma venda encontrada neste período." />
       )}
@@ -890,19 +889,19 @@ function SalesView({
   );
 }
 
-function DataTable({ sales }: { sales: Sale[] }) {
+function DataTable({ sales, onCancel }: { sales: Sale[]; onCancel?: (id: string) => void }) {
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>VENDEDOR / EMPRESA</th>
+            <th>RESPONSÁVEL / EMPRESA</th>
             <th>CLIENTE / CONSÓRCIO</th>
             <th>SUPERVISOR / EQUIPE</th>
             <th>DATA / HORA</th>
             <th>VALOR</th>
-            <th>ORIGEM / PAGAMENTO</th>
             <th>STATUS</th>
+            {onCancel && <th>AÇÃO</th>}
           </tr>
         </thead>
         <tbody>
@@ -918,11 +917,8 @@ function DataTable({ sales }: { sales: Sale[] }) {
               <td>
                 <strong className="sale-type">{s.buyerName || s.saleType}</strong>
                 <small className="sale-detail">
-                  {[s.saleType, s.administrator, s.groupNumber && `Grupo ${s.groupNumber}`]
-                    .filter(Boolean)
-                    .join(" • ") || "—"}
+                  {s.saleType} • {s.city || "Cidade não informada"}
                 </small>
-                {s.notes && <small className="sale-detail">{s.notes}</small>}
               </td>
               <td>
                 {s.supervisor}
@@ -934,15 +930,18 @@ function DataTable({ sales }: { sales: Sale[] }) {
               </td>
               <td className="table-value">{money(s.value)}</td>
               <td>
-                {s.leadSource || "—"}
-                <small className="sale-detail">{s.paymentMethod || "—"}</small>
-              </td>
-              <td>
-                <span className={`status ${s.status === "Confirmada" ? "confirmed" : "pending"}`}>
+                <span className={`status ${s.status === "Confirmada" ? "confirmed" : s.status === "Cancelada" ? "cancelled" : "pending"}`}>
                   <i />
-                  {s.status}
+                  {s.status === "Cancelada" ? "CANCELADA" : `EMPRESA - ${s.sellerCompany}`}
                 </span>
               </td>
+              {onCancel && (
+                <td>
+                  {s.status !== "Cancelada" && (
+                    <button className="ghost-btn danger-btn" onClick={() => onCancel(s.id)}>Cancelar venda</button>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -952,9 +951,9 @@ function DataTable({ sales }: { sales: Sale[] }) {
 }
 
 function RankingView({ sales }: { sales: Sale[] }) {
-  const [type, setType] = useState("Vendedores");
+  const [type, setType] = useState("Responsáveis");
   const data =
-    type === "Vendedores"
+    type === "Responsáveis"
       ? sellerRanking(sales)
       : type === "Supervisores"
         ? hierarchyRanking(sales, "supervisor")
@@ -973,7 +972,7 @@ function RankingView({ sales }: { sales: Sale[] }) {
         <Trophy size={42} />
       </div>
       <div className="rank-tabs">
-        {["Vendedores", "Supervisores", "Representantes", "Masters"].map((x) => (
+        {["Responsáveis", "Supervisores", "Representantes", "Masters"].map((x) => (
           <button className={type === x ? "active" : ""} key={x} onClick={() => setType(x)}>
             {x}
           </button>
@@ -1013,7 +1012,34 @@ function hierarchyRanking(sales: Sale[], key: keyof Sale) {
   return [...map.values()].sort((a, b) => b.value - a.value);
 }
 
-function GoalsView() {
+function GoalsView({ goals, people, role, onSave }: {
+  goals: Goal[];
+  people: Person[];
+  role: "director" | "master" | "representative" | "supervisor";
+  onSave: (input: { targetUserId: string; amount: number; periodMonth: string }) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const eligibleRoles = role === "director" ? ["master", "representative", "supervisor"] : role === "master" ? ["representative", "supervisor"] : role === "representative" ? ["supervisor"] : [];
+  const eligible = people.filter((person) => person.active && person.role && eligibleRoles.includes(person.role));
+  const names = new Map(people.map((person) => [person.user_id, person.full_name]));
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    try {
+      await onSave({
+        targetUserId: String(form.get("targetUserId")),
+        amount: Number(form.get("amount")),
+        periodMonth: `${String(form.get("periodMonth"))}-01`,
+      });
+      setOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cadastrar a meta.");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <section className="panel full-panel">
       <div className="panel-head">
@@ -1021,8 +1047,33 @@ function GoalsView() {
           <span className="panel-kicker">OBJETIVOS</span>
           <h3>Metas comerciais</h3>
         </div>
+        {eligible.length > 0 && <button className="primary-btn" onClick={() => setOpen(true)}><Plus size={16} /> Criar meta</button>}
       </div>
-      <EmptyState text="Nenhuma meta foi cadastrada. Esta tela exibirá apenas metas reais." />
+      {goals.length ? (
+        <div className="goal-grid">
+          {goals.map((goal) => (
+            <article className="panel goal-card" key={goal.id}>
+              <span>{new Date(`${goal.period_month}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span>
+              <h3>{names.get(goal.target_user_id) ?? "Responsável"}</h3>
+              <strong>{money(Number(goal.amount))}</strong>
+              <p>{goal.target_role === "master" ? "Master" : goal.target_role === "representative" ? "Representante" : "Supervisor"}</p>
+            </article>
+          ))}
+        </div>
+      ) : <EmptyState text="Nenhuma meta foi cadastrada." />}
+      {open && (
+        <div className="modal-backdrop">
+          <form className="sale-modal" onSubmit={submit}>
+            <div className="modal-head"><div><span className="panel-kicker">NOVA META</span><h3>Criar meta</h3></div><button type="button" onClick={() => setOpen(false)}><X size={19} /></button></div>
+            <div className="form-grid single">
+              <label>Responsável<select name="targetUserId" required autoFocus><option value="">Selecione</option>{eligible.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}</option>)}</select></label>
+              <label>Mês<input name="periodMonth" type="month" required /></label>
+              <label>Valor da meta<input name="amount" type="number" min="1" step="0.01" required /></label>
+            </div>
+            <div className="modal-actions"><button type="button" className="outline-btn" onClick={() => setOpen(false)}>Cancelar</button><button className="primary-btn" disabled={busy}>{busy ? "Salvando..." : "Salvar meta"}</button></div>
+          </form>
+        </div>
+      )}
     </section>
   );
 }
@@ -1158,11 +1209,7 @@ function SaleModal({
   const [buyerName, setBuyerName] = useState("");
   const [value, setValue] = useState("");
   const [saleType, setSaleType] = useState<Sale["saleType"]>("Veículos");
-  const [groupNumber, setGroupNumber] = useState("");
-  const [administrator, setAdministrator] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
-  const [leadSource, setLeadSource] = useState("");
-  const [notes, setNotes] = useState("");
+  const [city, setCity] = useState("");
   const selectedSeller = sellers.find((seller) => seller.user_id === sellerId);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1173,12 +1220,7 @@ function SaleModal({
       value: Number(value),
       status: "Confirmada",
       saleType,
-      groupNumber,
-      administrator,
-      creditValue: null,
-      paymentMethod,
-      leadSource,
-      notes,
+      city,
     });
   };
   return (
@@ -1188,7 +1230,7 @@ function SaleModal({
           <div>
             <span className="panel-kicker">NOVA OPERAÇÃO</span>
             <h3>Registrar venda</h3>
-            <p>Selecione o vendedor; a hierarquia será preenchida automaticamente.</p>
+            <p>Selecione o responsável; a hierarquia será preenchida automaticamente.</p>
           </div>
           <button type="button" onClick={onClose}>
             <X size={19} />
@@ -1196,7 +1238,7 @@ function SaleModal({
         </div>
         <div className="form-grid">
           <label>
-            Vendedor
+            Responsável pela venda
             <select
               value={sellerId}
               onChange={(e) => setSellerId(e.target.value)}
@@ -1236,6 +1278,10 @@ function SaleModal({
             <input value={selectedSeller?.team || "Sem equipe definida"} readOnly />
           </label>
           <label>
+            Cidade
+            <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={120} placeholder="Cidade da venda" required />
+          </label>
+          <label>
             Tipo da venda
             <select
               value={saleType}
@@ -1260,52 +1306,6 @@ function SaleModal({
               required
             />
           </label>
-          <label>
-            Administradora
-            <input
-              value={administrator}
-              onChange={(e) => setAdministrator(e.target.value)}
-              maxLength={120}
-              placeholder="Nome da administradora"
-            />
-          </label>
-          <label>
-            Grupo
-            <input
-              value={groupNumber}
-              onChange={(e) => setGroupNumber(e.target.value)}
-              maxLength={40}
-              placeholder="Número do grupo"
-            />
-          </label>
-          <label>
-            Forma de pagamento
-            <input
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              maxLength={80}
-              placeholder="Ex.: PIX, boleto"
-            />
-          </label>
-          <label>
-            Origem do cliente
-            <input
-              value={leadSource}
-              onChange={(e) => setLeadSource(e.target.value)}
-              maxLength={100}
-              placeholder="Ex.: indicação, Instagram"
-            />
-          </label>
-          <label className="full-field">
-            Observação
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              maxLength={1000}
-              rows={3}
-              placeholder="Informações importantes sobre a venda"
-            />
-          </label>
         </div>
         <div className="modal-note">
           <Zap size={17} />
@@ -1319,7 +1319,7 @@ function SaleModal({
           </button>
           <button
             className="primary-btn"
-            disabled={saving || !value || !sellerId || !sellerCompany || !buyerName}
+            disabled={saving || !value || !sellerId || !sellerCompany || !buyerName || !city}
           >
             <Check size={16} /> {saving ? "Confirmando..." : "Confirmar venda"}
           </button>
