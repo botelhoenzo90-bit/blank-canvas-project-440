@@ -117,7 +117,12 @@ type SaleInput = Pick<
 type Goal = import("@/integrations/supabase/types").Database["public"]["Tables"]["goals"]["Row"];
 
 const money = (n: number) =>
-  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  n.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 const initials = (name: string) =>
   name
     .split(" ")
