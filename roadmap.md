@@ -29,3 +29,6 @@
 - [x] Aplicar hierarquia com Super Master e Master separados
 - [x] Restringir vendas a Supervisor ou cargos acima e selecionar o vendedor
 - [x] Usar a nova logo e o novo texto nas notificações de vendas
+- [x] Simplificar a hierarquia para Diretor, Master, Representante e Supervisor
+- [x] Adicionar cidade, cancelamento de venda e cadastro de metas
+- [x] Atualizar a Central TV com alerta preto, sino e destaque da venda

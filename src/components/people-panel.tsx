@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { createPerson, listPeople, updatePerson } from "@/lib/people.functions";
 
 export type AppRole =
-  "director" | "super_master" | "master" | "representative" | "supervisor" | "seller";
+  "director" | "master" | "representative" | "supervisor";
 export type Person = {
   user_id: string;
   full_name: string;
@@ -20,19 +20,15 @@ export type Person = {
 
 const labels: Record<AppRole, string> = {
   director: "Presidente/Diretor",
-  super_master: "Super Master",
   master: "Master",
   representative: "Representante",
   supervisor: "Supervisor",
-  seller: "Vendedor",
 };
 const allowedRoles: Record<AppRole, AppRole[]> = {
-  director: ["director", "super_master", "master", "representative", "supervisor", "seller"],
-  super_master: ["master", "representative", "supervisor", "seller"],
-  master: ["representative", "supervisor", "seller"],
-  representative: ["supervisor", "seller"],
-  supervisor: ["seller"],
-  seller: [],
+  director: ["director", "master", "representative", "supervisor"],
+  master: ["representative", "supervisor"],
+  representative: ["supervisor"],
+  supervisor: [],
 };
 
 export function PeoplePanel({ role }: { role: AppRole }) {
@@ -213,7 +209,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                 <select name="managerId">
                   <option value="">Vincular a mim</option>
                   {people
-                    .filter((p) => p.active && p.role !== "seller")
+                    .filter((p) => p.active)
                     .map((p) => (
                       <option value={p.user_id} key={p.user_id}>
                         {p.full_name} · {p.role ? labels[p.role] : "Sem função"}
