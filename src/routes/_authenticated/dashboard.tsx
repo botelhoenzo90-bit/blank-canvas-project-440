@@ -821,7 +821,7 @@ function EmptyState({ text }: { text: string }) {
 
 function sellerRanking(sales: Sale[]) {
   const map = new Map<string, { name: string; value: number; sales: number }>();
-  sales.forEach((s) => {
+  sales.filter((sale) => sale.status === "Confirmada").forEach((s) => {
     const old = map.get(s.seller) || { name: s.seller, value: 0, sales: 0 };
     old.value += s.value;
     old.sales += 1;
@@ -1004,7 +1004,7 @@ function RankingView({ sales }: { sales: Sale[] }) {
 }
 function hierarchyRanking(sales: Sale[], key: keyof Sale) {
   const map = new Map<string, { name: string; value: number }>();
-  sales.forEach((s) => {
+  sales.filter((sale) => sale.status === "Confirmada").forEach((s) => {
     const name = String(s[key]);
     const old = map.get(name) || { name, value: 0 };
     old.value += s.value;
@@ -1089,7 +1089,8 @@ function ReportsView({ sales }: { sales: Sale[] }) {
       (!end || s.date <= end) &&
       (status === "Todos" || s.status === status),
   );
-  const total = filtered.reduce((a, b) => a + b.value, 0);
+  const confirmed = filtered.filter((sale) => sale.status === "Confirmada");
+  const total = confirmed.reduce((a, b) => a + b.value, 0);
   const csvCell = (value: string | number | null) =>
     `"${String(value ?? "").replaceAll('"', '""')}"`;
   const exportCsv = () => {
@@ -1177,7 +1178,7 @@ function ReportsView({ sales }: { sales: Sale[] }) {
           </div>
           <div>
             <span>Ticket médio</span>
-            <strong>{money(filtered.length ? total / filtered.length : 0)}</strong>
+            <strong>{money(confirmed.length ? total / confirmed.length : 0)}</strong>
           </div>
           <div>
             <span>Confirmadas</span>
@@ -1421,7 +1422,7 @@ function TvPanel({
               <span>STATUS</span>
             </div>
             {sales.length ? (
-              sales.slice(0, 7).map((s, i) => (
+              sales.filter((sale) => sale.status === "Confirmada").slice(0, 7).map((s, i) => (
                 <div className={`board-row ${i === 0 ? "highlight" : ""}`} key={s.id}>
                   <strong>{s.time}</strong>
                   <span className="board-person">
