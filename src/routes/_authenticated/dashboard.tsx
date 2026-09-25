@@ -31,7 +31,8 @@ import {
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
+import { cancelSale, createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
+import { createGoal, listGoals } from "@/lib/goals.functions";
 import { enablePushNotifications } from "@/lib/push";
 import { getMyAccess } from "@/lib/auth.functions";
 import { PeoplePanel, type Person } from "@/components/people-panel";
@@ -69,18 +70,15 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DabliuApp,
 });
 
-type Role =
-  "Presidente/Diretor" | "Super Master" | "Master" | "Representante" | "Supervisor" | "Vendedor";
+type Role = "Presidente/Diretor" | "Master" | "Representante" | "Supervisor";
 type View = "dashboard" | "sales" | "ranking" | "goals" | "team" | "reports" | "tv";
 const roleKey = (role: Role) =>
   (
     ({
       "Presidente/Diretor": "director",
-      "Super Master": "super_master",
       Master: "master",
       Representante: "representative",
       Supervisor: "supervisor",
-      Vendedor: "seller",
     }) as const
   )[role];
 
@@ -92,10 +90,11 @@ type Sale = {
   master: string;
   superMaster: string;
   team: string;
+  city: string;
   value: number;
   date: string;
   time: string;
-  status: "Confirmada" | "Pendente";
+  status: "Confirmada" | "Pendente" | "Cancelada";
   saleType: "Veículos" | "Imóveis" | "Pesados" | "Outro";
   groupNumber: string;
   sellerCompany: string;
@@ -112,15 +111,12 @@ type SaleInput = Pick<
   | "value"
   | "status"
   | "saleType"
-  | "groupNumber"
   | "sellerCompany"
   | "buyerName"
-  | "administrator"
-  | "creditValue"
-  | "paymentMethod"
-  | "leadSource"
-  | "notes"
+  | "city"
 > & { sellerId: string };
+
+type Goal = import("@/integrations/supabase/types").Database["public"]["Tables"]["goals"]["Row"];
 
 const money = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -139,10 +135,11 @@ const saleFromRow = (row: SaleRow): Sale => ({
   master: row.master,
   superMaster: row.super_master,
   team: row.team,
+  city: row.city,
   value: Number(row.value),
   date: row.sale_date,
   time: row.sale_time.slice(0, 5),
-  status: row.status === "Pendente" ? "Pendente" : "Confirmada",
+  status: row.status === "Pendente" ? "Pendente" : row.status === "Cancelada" ? "Cancelada" : "Confirmada",
   saleType: row.sale_type as Sale["saleType"],
   groupNumber: row.group_number,
   sellerCompany: row.seller_company,
@@ -171,10 +168,14 @@ function DabliuApp() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [people, setPeople] = useState<Person[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [tvMode, setTvMode] = useState(false);
   const [tvAnnouncement, setTvAnnouncement] = useState<Sale | null>(null);
   const [savingSale, setSavingSale] = useState(false);
   const createSale = useServerFn(createSaleAndNotify);
+  const cancelSaleRequest = useServerFn(cancelSale);
+  const loadGoals = useServerFn(listGoals);
+  const saveGoal = useServerFn(createGoal);
   const savePushDevice = useServerFn(registerPushDevice);
   const loadAccess = useServerFn(getMyAccess);
   const loadPeople = useServerFn(listPeople);
@@ -185,16 +186,13 @@ function DabliuApp() {
       ? (
           {
             director: "Presidente/Diretor",
-            super_master: "Super Master",
             master: "Master",
             representative: "Representante",
             supervisor: "Supervisor",
-            seller: "Vendedor",
           } as const
         )[access.role]
       : null;
     setRole(nextRole);
-    if (nextRole === "Vendedor") setView("sales");
     setProfileName(access.profile?.full_name ?? "");
     setProfileEmail(access.profile?.email ?? "");
     setProfilePhone(access.profile?.phone ?? "");
@@ -205,10 +203,10 @@ function DabliuApp() {
     void refreshAccess().catch(() => setAccessLoading(false));
   }, []);
   useEffect(() => {
-    if (role && role !== "Vendedor")
-      void loadPeople()
-        .then((items) => setPeople(items as Person[]))
-        .catch(() => setPeople([]));
+    if (role) {
+      void loadPeople().then((items) => setPeople(items as Person[])).catch(() => setPeople([]));
+      void loadGoals().then((items) => setGoals(items as Goal[])).catch(() => setGoals([]));
+    }
   }, [role]);
 
   useEffect(() => {
@@ -234,6 +232,10 @@ function DabliuApp() {
         toast.success("Nova venda registrada", {
           description: `${newSale.seller} • ${money(newSale.value)}`,
         });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sales" }, (payload) => {
+        const updatedSale = saleFromRow(payload.new as SaleRow);
+        setSales((current) => current.map((sale) => sale.id === updatedSale.id ? updatedSale : sale));
       })
       .subscribe();
     return () => {
@@ -271,6 +273,22 @@ function DabliuApp() {
     } finally {
       setSavingSale(false);
     }
+  };
+
+  const cancelRegisteredSale = async (saleId: string) => {
+    try {
+      await cancelSaleRequest({ data: { saleId } });
+      setSales((current) => current.map((sale) => sale.id === saleId ? { ...sale, status: "Cancelada" } : sale));
+      toast.success("Venda cancelada");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a venda.");
+    }
+  };
+
+  const registerGoal = async (input: { targetUserId: string; amount: number; periodMonth: string }) => {
+    await saveGoal({ data: input });
+    setGoals((await loadGoals()) as Goal[]);
+    toast.success("Meta cadastrada");
   };
 
   const activateNotifications = async () => {
@@ -320,8 +338,8 @@ function DabliuApp() {
     );
   if (accessPending) return <PendingAccess name={profileName} onExit={signOut} />;
   if (!role) return <PendingAccess name={profileName} onExit={signOut} />;
-  const canRegisterSale = role !== "Vendedor";
-  const sellers = people.filter((person) => person.active && person.role === "seller");
+  const canRegisterSale = true;
+  const saleOwners = people.filter((person) => person.active && person.role !== null);
 
   if (tvMode || view === "tv") {
     return (
@@ -349,53 +367,44 @@ function DabliuApp() {
           </button>
         </div>
         <nav>
-          {role !== "Vendedor" && (
-            <NavItem
+          <NavItem
               icon={<LayoutDashboard size={18} />}
               label="Visão geral"
               active={view === "dashboard"}
               onClick={() => navigate("dashboard")}
             />
-          )}
           <NavItem
             icon={<CircleDollarSign size={18} />}
             label="Vendas"
             active={view === "sales"}
             onClick={() => navigate("sales")}
           />
-          {role !== "Vendedor" && (
-            <NavItem
+          <NavItem
               icon={<Trophy size={18} />}
               label="Ranking"
               active={view === "ranking"}
               onClick={() => navigate("ranking")}
             />
-          )}
           <NavItem
             icon={<Target size={18} />}
             label="Metas"
             active={view === "goals"}
             onClick={() => navigate("goals")}
           />
-          {role !== "Vendedor" && (
-            <NavItem
+          <NavItem
               icon={<Users size={18} />}
               label="Equipe e acessos"
               active={view === "team"}
               onClick={() => navigate("team")}
             />
-          )}
-          {role !== "Vendedor" && (
-            <NavItem
+          <NavItem
               icon={<Activity size={18} />}
               label="Relatórios"
               active={view === "reports"}
               onClick={() => navigate("reports")}
             />
-          )}
-          {role !== "Vendedor" && <div className="nav-divider" />}
-          {role !== "Vendedor" && (
-            <NavItem
+          <div className="nav-divider" />
+          <NavItem
               icon={<MonitorPlay size={18} />}
               label="Central TV"
               active={false}
@@ -403,7 +412,6 @@ function DabliuApp() {
                 setView("tv");
               }}
             />
-          )}
           <NavItem
             icon={<Settings size={18} />}
             label="Sair"
@@ -562,11 +570,9 @@ function DabliuApp() {
               ))}
             </div>
             <div className="toolbar-right">
-              {role !== "Vendedor" && (
-                <button className="outline-btn" onClick={() => setTvMode(true)}>
+              <button className="outline-btn" onClick={() => setTvMode(true)}>
                   <MonitorPlay size={16} /> Abrir TV
                 </button>
-              )}
               {canRegisterSale && (
                 <button className="primary-btn" onClick={() => setShowSaleModal(true)}>
                   <Plus size={17} /> Registrar venda
@@ -589,11 +595,12 @@ function DabliuApp() {
               sales={periodSales}
               search={search}
               setSearch={setSearch}
-              {...(canRegisterSale ? { onAdd: () => setShowSaleModal(true) } : {})}
+              onAdd={() => setShowSaleModal(true)}
+              onCancel={(id) => void cancelRegisteredSale(id)}
             />
           )}
           {view === "ranking" && <RankingView sales={periodSales} />}
-          {view === "goals" && <GoalsView />}
+          {view === "goals" && <GoalsView goals={goals} people={people} role={roleKey(role)} onSave={registerGoal} />}
           {view === "team" && <PeoplePanel role={roleKey(role)} />}
           {view === "reports" && <ReportsView sales={sales} />}
         </div>
@@ -601,7 +608,7 @@ function DabliuApp() {
 
       {showSaleModal && canRegisterSale && (
         <SaleModal
-          sellers={sellers}
+          sellers={saleOwners}
           onClose={() => setShowSaleModal(false)}
           onSave={registerSale}
           saving={savingSale}
