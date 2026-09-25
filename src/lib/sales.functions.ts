@@ -26,18 +26,16 @@ export const registerPushDevice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => deviceSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("push_devices")
-      .upsert(
-        {
-          token: data.token,
-          user_id: context.userId,
-          device_label: data.deviceLabel,
-          active: true,
-          last_seen_at: new Date().toISOString(),
-        },
-        { onConflict: "token" },
-      );
+    const { error } = await context.supabase.from("push_devices").upsert(
+      {
+        token: data.token,
+        user_id: context.userId,
+        device_label: data.deviceLabel,
+        active: true,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: "token" },
+    );
     if (error) throw new Error("Não foi possível cadastrar este aparelho.");
     return { ok: true };
   });

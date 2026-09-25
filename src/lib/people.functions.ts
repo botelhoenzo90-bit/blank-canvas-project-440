@@ -82,14 +82,12 @@ export const createAdminInvite = createServerFn({ method: "POST" })
       byte.toString(16).padStart(2, "0"),
     ).join("");
     const expiresAt = new Date(Date.now() + data.validDays * 86400000).toISOString();
-    const { error } = await context.supabase
-      .from("admin_invites")
-      .insert({
-        code_hash: codeHash,
-        role: data.role,
-        created_by: context.userId,
-        expires_at: expiresAt,
-      });
+    const { error } = await context.supabase.from("admin_invites").insert({
+      code_hash: codeHash,
+      role: data.role,
+      created_by: context.userId,
+      expires_at: expiresAt,
+    });
     if (error) throw new Error("Não foi possível criar o convite.");
     return { code, expiresAt };
   });
@@ -133,20 +131,18 @@ export const createPerson = createServerFn({ method: "POST" })
     if (error || !created.user)
       throw new Error(error?.message ?? "Não foi possível criar o acesso.");
     const userId = created.user.id;
-    const { error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .insert({
-        user_id: userId,
-        full_name: data.fullName,
-        phone: data.phone,
-        email: data.email,
-        job_title: data.jobTitle,
-        team: data.team,
-        manager_id: managerId,
-        active: true,
-        created_by: context.userId,
-        updated_by: context.userId,
-      });
+    const { error: profileError } = await supabaseAdmin.from("profiles").insert({
+      user_id: userId,
+      full_name: data.fullName,
+      phone: data.phone,
+      email: data.email,
+      job_title: data.jobTitle,
+      team: data.team,
+      manager_id: managerId,
+      active: true,
+      created_by: context.userId,
+      updated_by: context.userId,
+    });
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error("Não foi possível salvar o perfil.");
@@ -154,14 +150,12 @@ export const createPerson = createServerFn({ method: "POST" })
     await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: userId, role: data.role, assigned_by: context.userId });
-    await supabaseAdmin
-      .from("access_audit")
-      .insert({
-        actor_id: context.userId,
-        target_user_id: userId,
-        action: "USER_CREATED",
-        details: { role: data.role },
-      });
+    await supabaseAdmin.from("access_audit").insert({
+      actor_id: context.userId,
+      target_user_id: userId,
+      action: "USER_CREATED",
+      details: { role: data.role },
+    });
     return { ok: true };
   });
 
@@ -208,13 +202,11 @@ export const updatePerson = createServerFn({ method: "POST" })
     if (!data.active)
       await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "876000h" });
     else await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "none" });
-    await supabaseAdmin
-      .from("access_audit")
-      .insert({
-        actor_id: context.userId,
-        target_user_id: data.userId,
-        action: "USER_UPDATED",
-        details: { role: data.role, active: data.active },
-      });
+    await supabaseAdmin.from("access_audit").insert({
+      actor_id: context.userId,
+      target_user_id: data.userId,
+      action: "USER_UPDATED",
+      details: { role: data.role, active: data.active },
+    });
     return { ok: true };
   });
