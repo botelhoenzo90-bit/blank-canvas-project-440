@@ -337,20 +337,7 @@ function DabliuApp() {
   if (accessPending) return <PendingAccess name={profileName} onExit={signOut} />;
   if (!role) return <PendingAccess name={profileName} onExit={signOut} />;
   const canRegisterSale = true;
-  const currentPerson: Person = {
-    user_id: "current-user",
-    full_name: profileName,
-    email: profileEmail,
-    phone: profilePhone,
-    job_title: "",
-    team: "",
-    manager_id: null,
-    active: true,
-    role: roleKey(role),
-  };
-  const saleOwners = people.some((person) => person.full_name === profileName)
-    ? people.filter((person) => person.active && person.role !== null)
-    : [currentPerson, ...people.filter((person) => person.active && person.role !== null)];
+  const saleOwners = people.filter((person) => person.active && person.role !== null);
 
   if (tvMode || view === "tv") {
     return (
