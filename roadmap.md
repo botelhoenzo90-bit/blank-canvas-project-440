@@ -32,3 +32,10 @@
 - [x] Simplificar a hierarquia para Diretor, Master, Representante e Supervisor
 - [x] Adicionar cidade, cancelamento de venda e cadastro de metas
 - [x] Atualizar a Central TV com alerta preto, sino e destaque da venda
+- [ ] Melhorar status das vendas no painel
+- [ ] Adicionar som de dinheiro às notificações e sino no painel
+- [ ] Exibir logomarca no destaque de 15 segundos da TV
+- [ ] Trocar ticket médio por vendas canceladas nos relatórios
+- [ ] Permitir logo da empresa no cadastro de pessoas
+- [ ] Remover identificação “from Dábliu” das notificações quando tecnicamente possível
+- [ ] Adicionar gráficos e percentual de progresso às metas
