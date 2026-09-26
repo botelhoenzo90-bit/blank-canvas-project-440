@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Store user-uploaded company logos in the private `company-logos` bucket and expose only temporary signed URLs, because team branding is authenticated data.
+- Load the uploaded sale-bell MP3 through a Lovable asset pointer and play it only for foreground sale alerts, because Web Push sound is controlled by the mobile operating system.
