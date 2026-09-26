@@ -294,7 +294,6 @@ function DabliuApp() {
   const todayTotal = todaySales.reduce((sum, s) => sum + s.value, 0);
   const confirmedPeriodSales = periodSales.filter((sale) => sale.status === "Confirmada");
   const periodTotal = confirmedPeriodSales.reduce((sum, s) => sum + s.value, 0);
-  const avgTicket = confirmedPeriodSales.length ? periodTotal / confirmedPeriodSales.length : 0;
 
   const registerSale = async (sale: SaleInput) => {
     setSavingSale(true);

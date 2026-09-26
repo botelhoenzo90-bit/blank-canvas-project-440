@@ -158,8 +158,14 @@ export const createPerson = createServerFn({ method: "POST" })
         await supabaseAdmin.auth.admin.deleteUser(userId);
         throw new Error("Use uma imagem PNG, JPG ou WEBP.");
       }
-      const extension = logoMatch[1] === "jpeg" ? "jpg" : logoMatch[1];
-      const bytes = Uint8Array.from(atob(logoMatch[2]), (character) => character.charCodeAt(0));
+      const imageType = logoMatch[1];
+      const encodedImage = logoMatch[2];
+      if (!imageType || !encodedImage) {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        throw new Error("Use uma imagem PNG, JPG ou WEBP.");
+      }
+      const extension = imageType === "jpeg" ? "jpg" : imageType;
+      const bytes = Uint8Array.from(atob(encodedImage), (character) => character.charCodeAt(0));
       if (bytes.byteLength > 2_000_000) {
         await supabaseAdmin.auth.admin.deleteUser(userId);
         throw new Error("A logomarca deve ter no máximo 2 MB.");
@@ -167,7 +173,7 @@ export const createPerson = createServerFn({ method: "POST" })
       const logoPath = `${userId}/logo.${extension}`;
       const { error: uploadError } = await supabaseAdmin.storage
         .from("company-logos")
-        .upload(logoPath, bytes, { contentType: `image/${logoMatch[1]}`, upsert: true });
+        .upload(logoPath, bytes, { contentType: `image/${imageType}`, upsert: true });
       if (uploadError) {
         await supabaseAdmin.auth.admin.deleteUser(userId);
         throw new Error("Não foi possível salvar a logomarca.");
