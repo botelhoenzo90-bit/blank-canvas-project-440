@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   ArrowUpRight,
   Bell,
   CalendarDays,
@@ -1383,7 +1382,10 @@ function TvPanel({
     if (!announcement) return;
     setFeaturedSale(announcement);
     setAnnouncementStage("blackout");
-    const bellTimer = window.setTimeout(() => setAnnouncementStage("bell"), 5000);
+    const bellTimer = window.setTimeout(() => {
+      setAnnouncementStage("bell");
+      playSaleChime();
+    }, 5000);
     const saleTimer = window.setTimeout(() => setAnnouncementStage("sale"), 15000);
     const endTimer = window.setTimeout(() => {
       setAnnouncementStage("idle");
