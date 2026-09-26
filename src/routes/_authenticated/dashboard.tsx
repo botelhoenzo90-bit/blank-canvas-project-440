@@ -254,7 +254,6 @@ function DabliuApp() {
         const newSale = saleFromRow(payload.new as SaleRow);
         setSales((current) => [newSale, ...current.filter((sale) => sale.id !== newSale.id)]);
         setTvAnnouncement(newSale);
-        if (!tvMode) playSaleChime();
         toast.success("Nova venda registrada", {
           description: `${newSale.seller} • ${money(newSale.value)}`,
         });
@@ -268,7 +267,7 @@ function DabliuApp() {
       active = false;
       void supabase.removeChannel(channel);
     };
-  }, [tvMode]);
+  }, []);
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
     new Date(),
@@ -1375,9 +1374,9 @@ function TvPanel({
     if (!announcement) return;
     setFeaturedSale(announcement);
     setAnnouncementStage("blackout");
+    playSaleChime();
     const bellTimer = window.setTimeout(() => {
       setAnnouncementStage("bell");
-      playSaleChime();
     }, 5000);
     const saleTimer = window.setTimeout(() => setAnnouncementStage("sale"), 15000);
     const endTimer = window.setTimeout(() => {
