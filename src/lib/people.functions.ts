@@ -19,6 +19,7 @@ const personSchema = z.object({
   jobTitle: z.string().trim().max(100),
   team: z.string().trim().max(100),
   managerId: z.string().uuid().nullable(),
+  companyLogoPath: z.string().trim().max(500).nullable(),
 });
 const updateSchema = z.object({
   userId: z.string().uuid(),
@@ -117,6 +118,8 @@ export const createPerson = createServerFn({ method: "POST" })
       if (!manager) throw new Error("Selecione um superior da sua estrutura.");
     }
     const managerId = data.managerId ?? context.userId;
+    if (data.companyLogoPath && !data.companyLogoPath.startsWith(`${context.userId}/`))
+      throw new Error("A logomarca enviada não é válida.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
@@ -135,6 +138,7 @@ export const createPerson = createServerFn({ method: "POST" })
       job_title: data.jobTitle,
       team: data.team,
       manager_id: managerId,
+      company_logo_path: data.companyLogoPath,
       active: true,
       created_by: context.userId,
       updated_by: context.userId,
