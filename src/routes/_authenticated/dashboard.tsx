@@ -39,6 +39,7 @@ import { PeoplePanel, type Person } from "@/components/people-panel";
 import { listPeople } from "@/lib/people.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import logo from "@/assets/dabliu-logo.png.asset.json";
+import saleBell from "@/assets/dabliu-sale-bell.mp3.asset.json";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -138,23 +139,11 @@ const currencyInputToNumber = (input: string) => {
 };
 const playSaleChime = () => {
   try {
-    const AudioContextClass = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const context = new AudioContextClass();
-    const now = context.currentTime;
-    [880, 1174, 1397].forEach((frequency, index) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(0.0001, now + index * 0.12);
-      gain.gain.exponentialRampToValueAtTime(0.16, now + index * 0.12 + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.12 + 0.28);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(now + index * 0.12);
-      oscillator.stop(now + index * 0.12 + 0.3);
+    const audio = new Audio(saleBell.url);
+    audio.volume = 1;
+    void audio.play().catch(() => {
+      // Mobile browsers may block sound until the user interacts with the page.
     });
-    window.setTimeout(() => void context.close(), 900);
   } catch {
     // Browsers may block sound until the user interacts with the page.
   }
@@ -265,7 +254,7 @@ function DabliuApp() {
         const newSale = saleFromRow(payload.new as SaleRow);
         setSales((current) => [newSale, ...current.filter((sale) => sale.id !== newSale.id)]);
         setTvAnnouncement(newSale);
-        playSaleChime();
+        if (!tvMode) playSaleChime();
         toast.success("Nova venda registrada", {
           description: `${newSale.seller} • ${money(newSale.value)}`,
         });
@@ -279,7 +268,7 @@ function DabliuApp() {
       active = false;
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [tvMode]);
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
     new Date(),

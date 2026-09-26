@@ -39,3 +39,4 @@
 - [x] Permitir logo da empresa no cadastro de pessoas
 - [x] Remover texto de origem do conteúdo das notificações; identificação do sistema é controlada pelo aparelho
 - [x] Adicionar gráficos e percentual de progresso às metas
+- [x] Usar o áudio enviado como sino das vendas no painel e na Central TV
