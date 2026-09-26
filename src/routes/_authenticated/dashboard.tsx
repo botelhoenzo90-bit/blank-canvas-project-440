@@ -135,6 +135,29 @@ const currencyInputToNumber = (input: string) => {
   const digits = input.replace(/\D/g, "");
   return digits ? Number(digits) / 100 : 0;
 };
+const playSaleChime = () => {
+  try {
+    const AudioContextClass = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const now = context.currentTime;
+    [880, 1174, 1397].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, now + index * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.16, now + index * 0.12 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.12 + 0.28);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(now + index * 0.12);
+      oscillator.stop(now + index * 0.12 + 0.3);
+    });
+    window.setTimeout(() => void context.close(), 900);
+  } catch {
+    // Browsers may block sound until the user interacts with the page.
+  }
+};
 const initials = (name: string) =>
   name
     .split(" ")
@@ -240,6 +263,7 @@ function DabliuApp() {
         const newSale = saleFromRow(payload.new as SaleRow);
         setSales((current) => [newSale, ...current.filter((sale) => sale.id !== newSale.id)]);
         setTvAnnouncement(newSale);
+        playSaleChime();
         toast.success("Nova venda registrada", {
           description: `${newSale.seller} • ${money(newSale.value)}`,
         });
@@ -598,7 +622,7 @@ function DabliuApp() {
               sales={periodSales}
               todayTotal={todayTotal}
               periodTotal={periodTotal}
-              avgTicket={avgTicket}
+              cancelledSales={periodSales.filter((sale) => sale.status === "Cancelada").length}
               period={period}
             />
           )}
@@ -612,7 +636,7 @@ function DabliuApp() {
             />
           )}
           {view === "ranking" && <RankingView sales={periodSales} />}
-          {view === "goals" && <GoalsView goals={goals} people={people} role={roleKey(role)} onSave={registerGoal} />}
+          {view === "goals" && <GoalsView goals={goals} people={people} sales={sales} role={roleKey(role)} onSave={registerGoal} />}
           {view === "team" && <PeoplePanel role={roleKey(role)} />}
           {view === "reports" && <ReportsView sales={sales} />}
         </div>
@@ -690,13 +714,13 @@ function Dashboard({
   sales,
   todayTotal,
   periodTotal,
-  avgTicket,
+  cancelledSales,
   period,
 }: {
   sales: Sale[];
   todayTotal: number;
   periodTotal: number;
-  avgTicket: number;
+  cancelledSales: number;
   period: string;
 }) {
   return (
@@ -728,9 +752,9 @@ function Dashboard({
           sub={`${sales.length} operações`}
         />
         <Metric
-          icon={<Activity />}
-          label="Ticket médio"
-          value={money(avgTicket)}
+          icon={<X />}
+          label="Vendas canceladas"
+          value={String(cancelledSales)}
           sub="no período selecionado"
         />
         <Metric
@@ -946,7 +970,7 @@ function DataTable({ sales, onCancel }: { sales: Sale[]; onCancel?: (id: string)
               <td>
                 <span className={`status ${s.status === "Confirmada" ? "confirmed" : s.status === "Cancelada" ? "cancelled" : "pending"}`}>
                   <i />
-                  {s.status === "Cancelada" ? "CANCELADA" : `EMPRESA - ${s.sellerCompany}`}
+                  {s.status}
                 </span>
               </td>
               {onCancel && (
@@ -1026,9 +1050,10 @@ function hierarchyRanking(sales: Sale[], key: keyof Sale) {
   return [...map.values()].sort((a, b) => b.value - a.value);
 }
 
-function GoalsView({ goals, people, role, onSave }: {
+function GoalsView({ goals, people, sales, role, onSave }: {
   goals: Goal[];
   people: Person[];
+  sales: Sale[];
   role: "director" | "master" | "representative" | "supervisor";
   onSave: (input: { targetUserId: string; amount: number; periodMonth: string }) => Promise<void>;
 }) {
@@ -1065,14 +1090,26 @@ function GoalsView({ goals, people, role, onSave }: {
       </div>
       {goals.length ? (
         <div className="goal-grid">
-          {goals.map((goal) => (
-            <article className="panel goal-card" key={goal.id}>
-              <span>{new Date(`${goal.period_month}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span>
-              <h3>{names.get(goal.target_user_id) ?? "Responsável"}</h3>
-              <strong>{money(Number(goal.amount))}</strong>
-              <p>{goal.target_role === "master" ? "Master" : goal.target_role === "representative" ? "Representante" : "Supervisor"}</p>
-            </article>
-          ))}
+          {goals.map((goal) => {
+            const month = goal.period_month.slice(0, 7);
+            const personName = names.get(goal.target_user_id) ?? "Responsável";
+            const achieved = sales
+              .filter((sale) => sale.status === "Confirmada" && sale.date.startsWith(month) && sale.seller === personName)
+              .reduce((sum, sale) => sum + sale.value, 0);
+            const target = Number(goal.amount);
+            const percentage = target > 0 ? Math.min(100, Math.round((achieved / target) * 100)) : 0;
+            const remaining = Math.max(0, target - achieved);
+            return (
+              <article className="goal-card" key={goal.id}>
+                <div className="goal-card-head"><span>{new Date(`${goal.period_month}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span><strong>{percentage}%</strong></div>
+                <h3>{personName}</h3>
+                <p>{goal.target_role === "master" ? "Master" : goal.target_role === "representative" ? "Representante" : "Supervisor"}</p>
+                <div className="goal-values"><div><span>Realizado</span><strong>{money(achieved)}</strong></div><div><span>Meta</span><strong>{money(target)}</strong></div></div>
+                <div className="goal-progress" role="progressbar" aria-valuenow={percentage} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${percentage}%` }} /></div>
+                <div className="goal-foot"><span>{percentage >= 100 ? "Meta atingida" : `Faltam ${money(remaining)}`}</span><b>{percentage}% concluída</b></div>
+              </article>
+            );
+          })}
         </div>
       ) : <EmptyState text="Nenhuma meta foi cadastrada." />}
       {open && (
@@ -1189,8 +1226,8 @@ function ReportsView({ sales }: { sales: Sale[] }) {
             <strong>{filtered.length}</strong>
           </div>
           <div>
-            <span>Ticket médio</span>
-            <strong>{money(confirmed.length ? total / confirmed.length : 0)}</strong>
+            <span>Vendas canceladas</span>
+            <strong>{filtered.filter((s) => s.status === "Cancelada").length}</strong>
           </div>
           <div>
             <span>Confirmadas</span>
@@ -1382,11 +1419,13 @@ function TvPanel({
         <section className="tv-alert-stage tv-blackout" aria-live="assertive" />
       ) : featuredSale && announcementStage === "bell" ? (
         <section className="tv-alert-stage tv-bell-stage" aria-live="assertive">
+          <img src={logo.url} alt="Dábliu Consórcios" className="tv-alert-logo" />
           <Bell size={110} />
           <strong>NOVA VENDA</strong>
         </section>
       ) : featuredSale && announcementStage === "sale" ? (
         <section className="sale-celebration" aria-live="assertive">
+          <img src={logo.url} alt="Dábliu Consórcios" className="celebration-logo" />
           <span className="celebration-live">
             <i /> NOVA VENDA CONFIRMADA
           </span>

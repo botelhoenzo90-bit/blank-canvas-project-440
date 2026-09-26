@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Check, ShieldCheck, UserPlus, X } from "lucide-react";
+import { Check, ImagePlus, ShieldCheck, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { createPerson, listPeople, updatePerson } from "@/lib/people.functions";
 
@@ -16,7 +16,20 @@ export type Person = {
   manager_id: string | null;
   active: boolean;
   role: AppRole | null;
+  company_logo_url: string | null;
 };
+
+const readLogo = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    if (!file.type.match(/^image\/(png|jpeg|webp)$/) || file.size > 2_000_000) {
+      reject(new Error("Use uma imagem PNG, JPG ou WEBP de até 2 MB."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+    reader.readAsDataURL(file);
+  });
 
 const labels: Record<AppRole, string> = {
   director: "Presidente/Diretor",
@@ -47,6 +60,10 @@ export function PeoplePanel({ role }: { role: AppRole }) {
     setBusy(true);
     const fd = new FormData(e.currentTarget);
     try {
+      const logoFile = fd.get("companyLogo");
+      const companyLogoDataUrl = logoFile instanceof File && logoFile.size > 0
+        ? await readLogo(logoFile)
+        : null;
       await create({
         data: {
           email: String(fd.get("email")),
@@ -57,6 +74,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
           jobTitle: "",
           team: String(fd.get("team")),
           managerId: String(fd.get("managerId") || "") || null,
+          companyLogoDataUrl,
         },
       });
       toast.success("Acesso criado com sucesso");
@@ -134,7 +152,10 @@ export function PeoplePanel({ role }: { role: AppRole }) {
             {people.map((p) => (
               <tr key={p.user_id}>
                 <td>
-                  <strong>{p.full_name}</strong>
+                  <span className="person-cell">
+                    {p.company_logo_url ? <img className="company-logo-thumb" src={p.company_logo_url} alt={`Logo de ${p.full_name}`} /> : <span className="company-logo-fallback">{p.full_name.charAt(0)}</span>}
+                    <strong>{p.full_name}</strong>
+                  </span>
                 </td>
                 <td>
                   <span className="contact-cell">
@@ -203,6 +224,12 @@ export function PeoplePanel({ role }: { role: AppRole }) {
               <label>
                 Equipe
                 <input name="team" required placeholder="Nome da equipe" />
+              </label>
+              <label className="company-logo-field">
+                Logomarca da empresa (opcional)
+                <span className="file-picker"><ImagePlus size={18} /> Escolher imagem</span>
+                <input name="companyLogo" type="file" accept="image/png,image/jpeg,image/webp" />
+                <small>PNG, JPG ou WEBP · máximo 2 MB</small>
               </label>
               <label>
                 Superior
