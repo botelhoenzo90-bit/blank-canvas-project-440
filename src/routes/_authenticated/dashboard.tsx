@@ -84,6 +84,7 @@ const roleKey = (role: Role) =>
 
 type Sale = {
   id: string;
+  ownerId: string | null;
   seller: string;
   supervisor: string;
   representative: string;
@@ -167,6 +168,7 @@ const initials = (name: string) =>
 type SaleRow = import("@/integrations/supabase/types").Database["public"]["Tables"]["sales"]["Row"];
 const saleFromRow = (row: SaleRow): Sale => ({
   id: row.id,
+  ownerId: row.owner_id,
   seller: row.seller,
   supervisor: row.supervisor,
   representative: row.representative,
@@ -294,6 +296,7 @@ function DabliuApp() {
   const todayTotal = todaySales.reduce((sum, s) => sum + s.value, 0);
   const confirmedPeriodSales = periodSales.filter((sale) => sale.status === "Confirmada");
   const periodTotal = confirmedPeriodSales.reduce((sum, s) => sum + s.value, 0);
+  const avgTicket = confirmedPeriodSales.length ? periodTotal / confirmedPeriodSales.length : 0;
 
   const registerSale = async (sale: SaleInput) => {
     setSavingSale(true);
@@ -621,7 +624,7 @@ function DabliuApp() {
               sales={periodSales}
               todayTotal={todayTotal}
               periodTotal={periodTotal}
-              cancelledSales={periodSales.filter((sale) => sale.status === "Cancelada").length}
+              avgTicket={avgTicket}
               period={period}
             />
           )}
@@ -713,13 +716,13 @@ function Dashboard({
   sales,
   todayTotal,
   periodTotal,
-  cancelledSales,
+  avgTicket,
   period,
 }: {
   sales: Sale[];
   todayTotal: number;
   periodTotal: number;
-  cancelledSales: number;
+  avgTicket: number;
   period: string;
 }) {
   return (
@@ -751,9 +754,9 @@ function Dashboard({
           sub={`${sales.length} operações`}
         />
         <Metric
-          icon={<X />}
-          label="Vendas canceladas"
-          value={String(cancelledSales)}
+          icon={<Activity />}
+          label="Ticket médio"
+          value={money(avgTicket)}
           sub="no período selecionado"
         />
         <Metric
@@ -1093,7 +1096,7 @@ function GoalsView({ goals, people, sales, role, onSave }: {
             const month = goal.period_month.slice(0, 7);
             const personName = names.get(goal.target_user_id) ?? "Responsável";
             const achieved = sales
-              .filter((sale) => sale.status === "Confirmada" && sale.date.startsWith(month) && sale.seller === personName)
+              .filter((sale) => sale.status === "Confirmada" && sale.date.startsWith(month) && sale.ownerId === goal.target_user_id)
               .reduce((sum, sale) => sum + sale.value, 0);
             const target = Number(goal.amount);
             const percentage = target > 0 ? Math.min(100, Math.round((achieved / target) * 100)) : 0;
