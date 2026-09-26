@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Store user-uploaded company logos in the private `company-logos` bucket and expose only temporary signed URLs, because team branding is authenticated data.

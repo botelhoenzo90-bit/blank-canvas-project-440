@@ -19,6 +19,7 @@ const personSchema = z.object({
   jobTitle: z.string().trim().max(100),
   team: z.string().trim().max(100),
   managerId: z.string().uuid().nullable(),
+  companyLogoDataUrl: z.string().max(3_000_000).nullable(),
 });
 const updateSchema = z.object({
   userId: z.string().uuid(),
@@ -97,9 +98,16 @@ export const listPeople = createServerFn({ method: "GET" })
     ]);
     if (error) throw new Error("Não foi possível carregar a equipe.");
     const roleMap = new Map((roles ?? []).map((item) => [item.user_id, item.role]));
-    return (profiles ?? []).map((profile) => ({
-      ...profile,
-      role: roleMap.get(profile.user_id) ?? null,
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    return Promise.all((profiles ?? []).map(async (profile) => {
+      const signed = profile.company_logo_path
+        ? await supabaseAdmin.storage.from("company-logos").createSignedUrl(profile.company_logo_path, 3600)
+        : null;
+      return {
+        ...profile,
+        company_logo_url: signed?.data?.signedUrl ?? null,
+        role: roleMap.get(profile.user_id) ?? null,
+      };
     }));
   });
 
@@ -135,6 +143,7 @@ export const createPerson = createServerFn({ method: "POST" })
       job_title: data.jobTitle,
       team: data.team,
       manager_id: managerId,
+      company_logo_path: null,
       active: true,
       created_by: context.userId,
       updated_by: context.userId,
@@ -142,6 +151,42 @@ export const createPerson = createServerFn({ method: "POST" })
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error("Não foi possível salvar o perfil.");
+    }
+    if (data.companyLogoDataUrl) {
+      const logoMatch = data.companyLogoDataUrl.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/);
+      if (!logoMatch) {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        throw new Error("Use uma imagem PNG, JPG ou WEBP.");
+      }
+      const imageType = logoMatch[1];
+      const encodedImage = logoMatch[2];
+      if (!imageType || !encodedImage) {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        throw new Error("Use uma imagem PNG, JPG ou WEBP.");
+      }
+      const extension = imageType === "jpeg" ? "jpg" : imageType;
+      const bytes = Uint8Array.from(atob(encodedImage), (character) => character.charCodeAt(0));
+      if (bytes.byteLength > 2_000_000) {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        throw new Error("A logomarca deve ter no máximo 2 MB.");
+      }
+      const logoPath = `${userId}/logo.${extension}`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("company-logos")
+        .upload(logoPath, bytes, { contentType: `image/${imageType}`, upsert: true });
+      if (uploadError) {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        throw new Error("Não foi possível salvar a logomarca.");
+      }
+      const { error: logoProfileError } = await supabaseAdmin
+        .from("profiles")
+        .update({ company_logo_path: logoPath })
+        .eq("user_id", userId);
+      if (logoProfileError) {
+        await supabaseAdmin.storage.from("company-logos").remove([logoPath]);
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        throw new Error("Não foi possível vincular a logomarca.");
+      }
     }
     await supabaseAdmin
       .from("user_roles")

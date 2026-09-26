@@ -17,6 +17,11 @@
   --green: #20b486;
   --red: #e45d69;
   --blue: #35689d;
+  --success-soft: #e9f8f2;
+  --warning: #ba7b2c;
+  --warning-soft: #fff5e7;
+  --danger: #b84646;
+  --danger-soft: #fff0f0;
   --radius: 10px;
 }
 :root[data-theme="dark"] {
@@ -34,6 +39,11 @@
   --green: #4bc59b;
   --red: #ef7c86;
   --blue: #73a3d1;
+  --success-soft: #17352d;
+  --warning: #e8ad63;
+  --warning-soft: #382b1b;
+  --danger: #ef7c86;
+  --danger-soft: #3b2024;
 }
 * {
   box-sizing: border-box;
@@ -1299,8 +1309,11 @@ td {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 750;
+  padding: 5px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
 }
 .status i {
   width: 5px;
@@ -1309,25 +1322,28 @@ td {
   display: block;
 }
 .status.confirmed {
-  color: #349b76;
+  color: var(--green);
+  background: var(--success-soft);
 }
 .status.confirmed i {
   background: #35c892;
 }
 .status.pending {
-  color: #ba7b2c;
+  color: var(--warning);
+  background: var(--warning-soft);
 }
 .status.pending i {
   background: #e5a14f;
 }
 .status.cancelled {
-  color: var(--danger, #b84646);
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 .status.cancelled i {
-  background: var(--danger, #b84646);
+  background: var(--danger);
 }
 .danger-btn {
-  color: var(--danger, #b84646);
+  color: var(--danger);
 }
 .row-more {
   border: 0;
@@ -1430,10 +1446,16 @@ td {
 }
 .goal-card {
   padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
 }
 .goal-card-head {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-size: 10px;
 }
 .goal-card-head button {
   border: 0;
@@ -1473,6 +1495,23 @@ td {
   color: #a0a4aa;
   margin: 12px 0 0;
 }
+.goal-values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+.goal-values div { min-width: 0; }
+.goal-values span { display: block; color: var(--muted); font-size: 9px; }
+.goal-values strong { display: block; margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }
+.goal-progress { height: 10px; margin-top: 16px; overflow: hidden; border-radius: 5px; background: var(--surface-2); }
+.goal-progress i { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--accent); transition: width 0.5s ease; }
+.company-logo-thumb, .company-logo-fallback { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 6px; }
+.company-logo-thumb { object-fit: contain; background: var(--surface); border: 1px solid var(--line); }
+.company-logo-fallback { display: grid; place-items: center; background: var(--surface-2); color: var(--accent-strong); font-weight: 850; }
+.company-logo-field input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.file-picker { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); cursor: pointer; }
+.company-logo-field small { color: var(--muted); }
 .create-goal {
   display: flex;
   flex-direction: column;
@@ -1743,6 +1782,7 @@ td {
   font-size: clamp(28px, 4vw, 58px);
   letter-spacing: 0;
 }
+.tv-alert-logo { position: absolute; top: 8vh; width: min(240px, 34vw); height: auto; filter: brightness(0) invert(1); }
 @keyframes tv-bell-ring {
   from { transform: rotate(-10deg) scale(0.96); }
   to { transform: rotate(10deg) scale(1.04); }
@@ -1964,6 +2004,7 @@ td {
   text-align: center;
   animation: celebration-in 0.45s ease-out;
 }
+.celebration-logo { width: min(230px, 34vw); height: auto; margin-bottom: 30px; }
 .celebration-live {
   display: flex;
   align-items: center;
