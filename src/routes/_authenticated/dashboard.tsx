@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
+  BarChart3,
   Bell,
   CalendarDays,
   Check,

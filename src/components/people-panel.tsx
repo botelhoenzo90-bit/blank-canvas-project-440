@@ -209,7 +209,15 @@ export function PeoplePanel({ role }: { role: AppRole }) {
               </label>
               <label>
                 Senha inicial
-                <input name="password" type="password" minLength={8} required />
+                <input
+                  name="password"
+                  type="password"
+                  minLength={10}
+                  maxLength={72}
+                  pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{10,72}"
+                  title="Use ao menos 10 caracteres, com maiúscula, minúscula, número e símbolo."
+                  required
+                />
               </label>
               <label>
                 Função
