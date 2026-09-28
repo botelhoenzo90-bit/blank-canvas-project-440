@@ -2185,6 +2185,13 @@ td {
   }
 }
 @media (max-width: 780px) {
+  .goals-chart-summary {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .goals-chart-row {
+    grid-template-columns: minmax(72px, 100px) 1fr 34px;
+  }
   .auth-page {
     grid-template-columns: 1fr;
     padding: 18px;
