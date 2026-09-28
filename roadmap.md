@@ -50,4 +50,4 @@
 - [x] Permitir editar perfil, empresa, equipe e logomarca pelo menu de opções
 - [x] Melhorar os gráficos da visão geral com dados reais
 - [x] Destacar a logomarca da empresa do Representante na venda da Central TV
-- [ ] Ampliar a Visão Geral com gráficos profissionais de evolução, composição, status e desempenho
+- [x] Ampliar a Visão Geral com gráficos profissionais de evolução, composição, status e desempenho
