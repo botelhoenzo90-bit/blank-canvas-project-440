@@ -125,6 +125,7 @@ export type Database = {
           email: string
           full_name: string
           job_title: string
+          management_name: string
           manager_id: string | null
           phone: string
           preferences: Json
@@ -142,6 +143,7 @@ export type Database = {
           email?: string
           full_name?: string
           job_title?: string
+          management_name?: string
           manager_id?: string | null
           phone?: string
           preferences?: Json
@@ -159,6 +161,7 @@ export type Database = {
           email?: string
           full_name?: string
           job_title?: string
+          management_name?: string
           manager_id?: string | null
           phone?: string
           preferences?: Json
