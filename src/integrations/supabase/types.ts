@@ -120,11 +120,13 @@ export type Database = {
           active: boolean
           avatar_url: string | null
           company_logo_path: string | null
+          company_name: string
           created_at: string
           created_by: string | null
           email: string
           full_name: string
           job_title: string
+          management_name: string
           manager_id: string | null
           phone: string
           preferences: Json
@@ -137,11 +139,13 @@ export type Database = {
           active?: boolean
           avatar_url?: string | null
           company_logo_path?: string | null
+          company_name?: string
           created_at?: string
           created_by?: string | null
           email?: string
           full_name?: string
           job_title?: string
+          management_name?: string
           manager_id?: string | null
           phone?: string
           preferences?: Json
@@ -154,11 +158,13 @@ export type Database = {
           active?: boolean
           avatar_url?: string | null
           company_logo_path?: string | null
+          company_name?: string
           created_at?: string
           created_by?: string | null
           email?: string
           full_name?: string
           job_title?: string
+          management_name?: string
           manager_id?: string | null
           phone?: string
           preferences?: Json

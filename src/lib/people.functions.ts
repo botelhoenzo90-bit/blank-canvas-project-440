@@ -10,6 +10,25 @@ const roleSchema = z.enum([
   "representative",
   "supervisor",
 ]);
+const logoSchema = z.string().max(70_000_000).nullable();
+const profileFields = {
+  fullName: z.string().trim().min(3).max(120),
+  phone: z.string().trim().min(10).max(20),
+  role: roleSchema,
+  jobTitle: z.string().trim().max(100),
+  team: z.string().trim().max(100),
+  companyName: z.string().trim().max(160),
+  managementName: z.string().trim().max(160),
+  managerId: z.string().uuid().nullable(),
+};
+const validateRoleFields = (data: { role: AppRole; team: string; companyName: string; managementName: string }, ctx: z.RefinementCtx) => {
+  if (data.role === "supervisor" && data.team.length < 2)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["team"], message: "Informe o nome da equipe." });
+  if (data.role === "representative" && data.companyName.length < 2)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["companyName"], message: "Informe o nome da empresa." });
+  if (data.role === "representative" && data.managementName.length < 2)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["managementName"], message: "Informe o nome da gestão." });
+};
 const personSchema = z.object({
   email: z.string().email().max(200),
   password: z.string().min(10).max(72)
@@ -17,30 +36,23 @@ const personSchema = z.object({
     .regex(/[A-Z]/, "A senha precisa ter letra maiúscula.")
     .regex(/[0-9]/, "A senha precisa ter número.")
     .regex(/[^A-Za-z0-9]/, "A senha precisa ter símbolo."),
-  fullName: z.string().trim().min(3).max(120),
-  phone: z.string().trim().min(10).max(20),
-  role: roleSchema,
-  jobTitle: z.string().trim().max(100),
-  team: z.string().trim().max(100),
-  managerId: z.string().uuid().nullable(),
-  companyLogoDataUrl: z.string().max(3_000_000).nullable(),
-});
+  ...profileFields,
+  companyLogoDataUrl: logoSchema,
+}).superRefine(validateRoleFields);
 const updateSchema = z.object({
   userId: z.string().uuid(),
-  fullName: z.string().trim().min(3).max(120),
-  phone: z.string().trim().max(20),
-  role: roleSchema,
-  jobTitle: z.string().trim().max(100),
-  team: z.string().trim().max(100),
-  managerId: z.string().uuid().nullable(),
+  ...profileFields,
   active: z.boolean(),
-});
+  companyLogoDataUrl: logoSchema,
+  removeCompanyLogo: z.boolean(),
+}).superRefine(validateRoleFields);
 const inviteSchema = z.object({
   role: z.enum(["director"]),
   validDays: z.number().int().min(1).max(30),
 });
 
 type AppRole = z.infer<typeof roleSchema>;
+type LogoPayload = { companyLogoDataUrl: string | null };
 const canCreate: Record<AppRole, AppRole[]> = {
   director: ["director", "master", "representative", "supervisor"],
   master: ["representative", "supervisor"],
@@ -65,6 +77,17 @@ async function assertCanManage(context: AuthContext, targetRole: AppRole) {
   const actorRole = await getActorRole(context);
   if (!canCreate[actorRole].includes(targetRole))
     throw new Error("Seu cargo não pode criar ou alterar este nível de acesso.");
+}
+
+async function decodeLogo(data: LogoPayload) {
+  if (!data.companyLogoDataUrl) return null;
+  const logoMatch = data.companyLogoDataUrl.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/);
+  const imageType = logoMatch?.[1];
+  const encodedImage = logoMatch?.[2];
+  if (!imageType || !encodedImage) throw new Error("Use uma imagem PNG, JPG ou WEBP.");
+  const bytes = Uint8Array.from(atob(encodedImage), (character) => character.charCodeAt(0));
+  if (bytes.byteLength > 50_000_000) throw new Error("A logomarca deve ter no máximo 50 MB.");
+  return { bytes, imageType, extension: imageType === "jpeg" ? "jpg" : imageType };
 }
 
 export const createAdminInvite = createServerFn({ method: "POST" })
@@ -146,6 +169,8 @@ export const createPerson = createServerFn({ method: "POST" })
       email: data.email,
       job_title: data.jobTitle,
       team: data.team,
+       company_name: data.companyName,
+       management_name: data.managementName,
       manager_id: managerId,
       company_logo_path: null,
       active: true,
@@ -157,23 +182,9 @@ export const createPerson = createServerFn({ method: "POST" })
       throw new Error("Não foi possível salvar o perfil.");
     }
     if (data.companyLogoDataUrl) {
-      const logoMatch = data.companyLogoDataUrl.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/);
-      if (!logoMatch) {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-        throw new Error("Use uma imagem PNG, JPG ou WEBP.");
-      }
-      const imageType = logoMatch[1];
-      const encodedImage = logoMatch[2];
-      if (!imageType || !encodedImage) {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-        throw new Error("Use uma imagem PNG, JPG ou WEBP.");
-      }
-      const extension = imageType === "jpeg" ? "jpg" : imageType;
-      const bytes = Uint8Array.from(atob(encodedImage), (character) => character.charCodeAt(0));
-      if (bytes.byteLength > 2_000_000) {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-        throw new Error("A logomarca deve ter no máximo 2 MB.");
-      }
+      const decodedLogo = await decodeLogo(data);
+      if (!decodedLogo) throw new Error("Não foi possível ler a logomarca.");
+      const { bytes, imageType, extension } = decodedLogo;
       const logoPath = `${userId}/logo.${extension}`;
       const { error: uploadError } = await supabaseAdmin.storage
         .from("company-logos")
@@ -238,12 +249,34 @@ export const updatePerson = createServerFn({ method: "POST" })
         phone: data.phone,
         job_title: data.jobTitle,
         team: data.team,
+         company_name: data.companyName,
+         management_name: data.managementName,
         manager_id: data.managerId,
         active: data.active,
         updated_by: context.userId,
       })
       .eq("user_id", data.userId);
     if (error) throw new Error("Não foi possível atualizar esta pessoa.");
+    const { data: currentProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("company_logo_path")
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    if (data.removeCompanyLogo && currentProfile?.company_logo_path) {
+      await supabaseAdmin.storage.from("company-logos").remove([currentProfile.company_logo_path]);
+      await supabaseAdmin.from("profiles").update({ company_logo_path: null }).eq("user_id", data.userId);
+    } else if (data.companyLogoDataUrl) {
+      const decodedLogo = await decodeLogo(data);
+      if (!decodedLogo) throw new Error("Não foi possível ler a logomarca.");
+      const logoPath = `${data.userId}/logo.${decodedLogo.extension}`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("company-logos")
+        .upload(logoPath, decodedLogo.bytes, { contentType: `image/${decodedLogo.imageType}`, upsert: true });
+      if (uploadError) throw new Error("Não foi possível trocar a logomarca.");
+      if (currentProfile?.company_logo_path && currentProfile.company_logo_path !== logoPath)
+        await supabaseAdmin.storage.from("company-logos").remove([currentProfile.company_logo_path]);
+      await supabaseAdmin.from("profiles").update({ company_logo_path: logoPath }).eq("user_id", data.userId);
+    }
     if (!data.active)
       await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "876000h" });
     else await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "none" });
