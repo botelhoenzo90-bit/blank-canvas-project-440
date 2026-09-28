@@ -32,6 +32,20 @@ import {
   Zap,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart as SalesBarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { cancelSale, createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
 import { createGoal, listGoals } from "@/lib/goals.functions";
@@ -719,12 +733,44 @@ function Dashboard({
   const confirmed = sales.filter((sale) => sale.status === "Confirmada");
   const dailyMap = new Map<string, number>();
   confirmed.forEach((sale) => dailyMap.set(sale.date, (dailyMap.get(sale.date) ?? 0) + sale.value));
-  const daily = [...dailyMap.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-7);
-  const dailyMax = Math.max(...daily.map(([, value]) => value), 1);
+  const daily = [...dailyMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-10)
+    .map(([date, value]) => ({
+      date: new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", ""),
+      value,
+    }));
   const typeMap = new Map<string, number>();
   confirmed.forEach((sale) => typeMap.set(sale.saleType, (typeMap.get(sale.saleType) ?? 0) + sale.value));
-  const byType = [...typeMap.entries()].sort((a, b) => b[1] - a[1]);
-  const typeMax = Math.max(...byType.map(([, value]) => value), 1);
+  const byType = [...typeMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value]) => ({ name, value }));
+  const statusData = [
+    { name: "Confirmadas", value: sales.filter((sale) => sale.status === "Confirmada").length, color: "var(--chart-success)" },
+    { name: "Pendentes", value: sales.filter((sale) => sale.status === "Pendente").length, color: "var(--chart-warning)" },
+    { name: "Canceladas", value: sales.filter((sale) => sale.status === "Cancelada").length, color: "var(--chart-danger)" },
+  ];
+  const activeStatusData = statusData.filter((item) => item.value > 0);
+  const statusTotal = statusData.reduce((total, item) => total + item.value, 0);
+  const ranking = sellerRanking(sales);
+  const performanceData = ranking.slice(0, 6).map((item) => ({
+    name: item.name.split(" ").slice(0, 2).join(" "),
+    value: item.value,
+    sales: item.sales,
+  }));
+  const compactMoney = (value: number) => value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
+  const tooltipStyle = {
+    background: "var(--surface)",
+    border: "1px solid var(--line)",
+    borderRadius: 8,
+    color: "var(--ink)",
+    fontSize: 11,
+  };
   return (
     <>
       <section className="welcome-strip">
@@ -767,15 +813,40 @@ function Dashboard({
         />
       </section>
       <section className="overview-charts">
-        <div className="panel overview-chart-panel">
+        <div className="panel overview-chart-panel overview-chart-wide">
           <div className="panel-head"><div><span className="panel-kicker">EVOLUÇÃO</span><h3>Resultado por dia</h3></div><TrendingUp size={20} /></div>
-          {daily.length ? <div className="daily-chart" aria-label="Resultado diário dos últimos sete dias">
-            {daily.map(([date, value]) => <div className="daily-column" key={date}><strong>{money(value)}</strong><div><i style={{ height: `${Math.max(8, (value / dailyMax) * 100)}%` }} /></div><span>{new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "")}</span></div>)}
+          {daily.length ? <div className="rechart-frame" aria-label="Evolução do resultado por dia">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={daily} margin={{ top: 18, right: 8, left: 2, bottom: 0 }}>
+                <defs><linearGradient id="salesAreaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--chart-primary)" stopOpacity={0.34} /><stop offset="100%" stopColor="var(--chart-primary)" stopOpacity={0.02} /></linearGradient></defs>
+                <CartesianGrid stroke="var(--line)" strokeDasharray="3 5" vertical={false} />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} width={58} tick={{ fill: "var(--muted)", fontSize: 9 }} tickFormatter={compactMoney} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [money(value), "Resultado"]} />
+                <Area type="monotone" dataKey="value" stroke="var(--chart-primary)" strokeWidth={3} fill="url(#salesAreaFill)" activeDot={{ r: 5, fill: "var(--surface)", stroke: "var(--chart-primary)", strokeWidth: 3 }} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div> : <EmptyState text="O gráfico aparecerá após a primeira venda confirmada." />}
         </div>
+        <div className="panel overview-chart-panel status-chart-panel">
+          <div className="panel-head"><div><span className="panel-kicker">QUALIDADE</span><h3>Status das vendas</h3></div><Activity size={20} /></div>
+          {statusTotal ? <div className="status-chart-layout">
+            <div className="donut-wrap">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart><Pie data={activeStatusData} dataKey="value" nameKey="name" innerRadius="68%" outerRadius="94%" paddingAngle={3} stroke="none">{activeStatusData.map((item) => <Cell key={item.name} fill={item.color} />)}</Pie><Tooltip contentStyle={tooltipStyle} /></PieChart>
+              </ResponsiveContainer>
+              <div className="donut-center"><strong>{statusTotal}</strong><span>vendas</span></div>
+            </div>
+            <div className="chart-legend">{statusData.map((item) => <div key={item.name}><i style={{ background: item.color }} /><span>{item.name}</span><strong>{item.value}</strong><small>{statusTotal ? Math.round((item.value / statusTotal) * 100) : 0}%</small></div>)}</div>
+          </div> : <EmptyState text="A distribuição aparecerá após a primeira venda." />}
+        </div>
         <div className="panel overview-chart-panel">
-          <div className="panel-head"><div><span className="panel-kicker">COMPOSIÇÃO</span><h3>Vendas por categoria</h3></div><BarChart3 size={20} /></div>
-          {byType.length ? <div className="category-chart">{byType.map(([type, value]) => <div className="category-row" key={type}><div><strong>{type}</strong><span>{money(value)}</span></div><div className="category-track"><i style={{ width: `${Math.max(4, (value / typeMax) * 100)}%` }} /></div></div>)}</div> : <EmptyState text="As categorias aparecerão após a primeira venda confirmada." />}
+          <div className="panel-head"><div><span className="panel-kicker">COMPOSIÇÃO</span><h3>Volume por categoria</h3></div><BarChart3 size={20} /></div>
+          {byType.length ? <div className="rechart-frame category-rechart" aria-label="Volume vendido por categoria"><ResponsiveContainer width="100%" height="100%"><SalesBarChart data={byType} layout="vertical" margin={{ top: 10, right: 8, left: 8, bottom: 0 }}><CartesianGrid stroke="var(--line)" strokeDasharray="3 5" horizontal={false} /><XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 9 }} tickFormatter={compactMoney} /><YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={64} tick={{ fill: "var(--muted)", fontSize: 10 }} /><Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [money(value), "Volume"]} /><Bar dataKey="value" fill="var(--chart-secondary)" radius={[0, 5, 5, 0]} barSize={18} /></SalesBarChart></ResponsiveContainer></div> : <EmptyState text="As categorias aparecerão após a primeira venda confirmada." />}
+        </div>
+        <div className="panel overview-chart-panel">
+          <div className="panel-head"><div><span className="panel-kicker">DESEMPENHO</span><h3>Resultado por responsável</h3></div><Trophy size={20} /></div>
+          {performanceData.length ? <div className="rechart-frame performance-rechart" aria-label="Resultado por responsável"><ResponsiveContainer width="100%" height="100%"><SalesBarChart data={performanceData} margin={{ top: 14, right: 4, left: 0, bottom: 0 }}><CartesianGrid stroke="var(--line)" strokeDasharray="3 5" vertical={false} /><XAxis dataKey="name" axisLine={false} tickLine={false} interval={0} tick={{ fill: "var(--muted)", fontSize: 9 }} /><YAxis axisLine={false} tickLine={false} width={58} tick={{ fill: "var(--muted)", fontSize: 9 }} tickFormatter={compactMoney} /><Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [money(value), "Resultado"]} /><Bar dataKey="value" fill="var(--chart-primary)" radius={[5, 5, 0, 0]} maxBarSize={38} /></SalesBarChart></ResponsiveContainer></div> : <EmptyState text="O desempenho aparecerá após a primeira venda confirmada." />}
         </div>
       </section>
       <section className="dashboard-grid lower">
