@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Smartphone,
   Target,
+  TrendingUp,
   Trophy,
   Users,
   X,
@@ -372,6 +373,7 @@ function DabliuApp() {
     return (
       <TvPanel
         sales={sales}
+         people={people}
         announcement={tvAnnouncement}
         onExit={() => {
           setTvMode(false);
@@ -714,6 +716,15 @@ function Dashboard({
   avgTicket: number;
   period: string;
 }) {
+  const confirmed = sales.filter((sale) => sale.status === "Confirmada");
+  const dailyMap = new Map<string, number>();
+  confirmed.forEach((sale) => dailyMap.set(sale.date, (dailyMap.get(sale.date) ?? 0) + sale.value));
+  const daily = [...dailyMap.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-7);
+  const dailyMax = Math.max(...daily.map(([, value]) => value), 1);
+  const typeMap = new Map<string, number>();
+  confirmed.forEach((sale) => typeMap.set(sale.saleType, (typeMap.get(sale.saleType) ?? 0) + sale.value));
+  const byType = [...typeMap.entries()].sort((a, b) => b[1] - a[1]);
+  const typeMax = Math.max(...byType.map(([, value]) => value), 1);
   return (
     <>
       <section className="welcome-strip">
@@ -754,6 +765,18 @@ function Dashboard({
           value={String(sales.filter((sale) => sale.status === "Confirmada").length)}
           sub="no período selecionado"
         />
+      </section>
+      <section className="overview-charts">
+        <div className="panel overview-chart-panel">
+          <div className="panel-head"><div><span className="panel-kicker">EVOLUÇÃO</span><h3>Resultado por dia</h3></div><TrendingUp size={20} /></div>
+          {daily.length ? <div className="daily-chart" aria-label="Resultado diário dos últimos sete dias">
+            {daily.map(([date, value]) => <div className="daily-column" key={date}><strong>{money(value)}</strong><div><i style={{ height: `${Math.max(8, (value / dailyMax) * 100)}%` }} /></div><span>{new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "")}</span></div>)}
+          </div> : <EmptyState text="O gráfico aparecerá após a primeira venda confirmada." />}
+        </div>
+        <div className="panel overview-chart-panel">
+          <div className="panel-head"><div><span className="panel-kicker">COMPOSIÇÃO</span><h3>Vendas por categoria</h3></div><BarChart3 size={20} /></div>
+          {byType.length ? <div className="category-chart">{byType.map(([type, value]) => <div className="category-row" key={type}><div><strong>{type}</strong><span>{money(value)}</span></div><div className="category-track"><i style={{ width: `${Math.max(4, (value / typeMax) * 100)}%` }} /></div></div>)}</div> : <EmptyState text="As categorias aparecerão após a primeira venda confirmada." />}
+        </div>
       </section>
       <section className="dashboard-grid lower">
         <div className="panel ranking-panel">
@@ -1375,10 +1398,12 @@ function SaleModal({
 
 function TvPanel({
   sales,
+  people,
   announcement,
   onExit,
 }: {
   sales: Sale[];
+  people: Person[];
   announcement: Sale | null;
   onExit: () => void;
 }) {
@@ -1412,6 +1437,9 @@ function TvPanel({
     new Date(),
   );
   const todaySales = sales.filter((s) => s.date === today);
+  const representativeLogo = featuredSale
+    ? people.find((person) => person.role === "representative" && person.full_name === featuredSale.representative)?.company_logo_url ?? null
+    : null;
   return (
     <div className="tv-screen">
       <div className="tv-top">
@@ -1437,7 +1465,7 @@ function TvPanel({
         </section>
       ) : featuredSale && announcementStage === "sale" ? (
         <section className="sale-celebration" aria-live="assertive">
-          <img src={logo.url} alt="Dábliu Consórcios" className="celebration-logo" />
+          {representativeLogo ? <img src={representativeLogo} alt={`Logo de ${featuredSale.sellerCompany}`} className="celebration-company-logo" /> : <div className="celebration-company-fallback">{initials(featuredSale.sellerCompany)}</div>}
           <span className="celebration-live">
             <i /> NOVA VENDA CONFIRMADA
           </span>

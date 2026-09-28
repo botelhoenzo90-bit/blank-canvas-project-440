@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Check, ImagePlus, ShieldCheck, UserPlus, X } from "lucide-react";
+import { Check, ImagePlus, MoreHorizontal, Pencil, Power, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { createPerson, listPeople, updatePerson } from "@/lib/people.functions";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export type AppRole =
   "director" | "master" | "representative" | "supervisor";
@@ -13,6 +15,8 @@ export type Person = {
   phone: string;
   job_title: string;
   team: string;
+  company_name: string;
+  management_name: string;
   manager_id: string | null;
   active: boolean;
   role: AppRole | null;
@@ -21,8 +25,8 @@ export type Person = {
 
 const readLogo = (file: File) =>
   new Promise<string>((resolve, reject) => {
-    if (!file.type.match(/^image\/(png|jpeg|webp)$/) || file.size > 2_000_000) {
-      reject(new Error("Use uma imagem PNG, JPG ou WEBP de até 2 MB."));
+    if (!file.type.match(/^image\/(png|jpeg|webp)$/) || file.size > 50_000_000) {
+      reject(new Error("Use uma imagem PNG, JPG ou WEBP de até 50 MB."));
       return;
     }
     const reader = new FileReader();
@@ -50,11 +54,32 @@ export function PeoplePanel({ role }: { role: AppRole }) {
   const update = useServerFn(updatePerson);
   const [people, setPeople] = useState<Person[]>([]);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Person | null>(null);
+  const [selectedRole, setSelectedRole] = useState<AppRole>(allowedRoles[role][0] ?? "supervisor");
+  const [removeLogo, setRemoveLogo] = useState(false);
   const [busy, setBusy] = useState(false);
   const refresh = async () => setPeople((await load()) as Person[]);
   useEffect(() => {
     void refresh().catch(() => toast.error("Não foi possível carregar a equipe."));
   }, []);
+  const openCreate = () => {
+    setEditing(null);
+    setSelectedRole(choices[0] ?? "supervisor");
+    setRemoveLogo(false);
+    setOpen(true);
+  };
+  const openEdit = (person: Person) => {
+    if (!person.role) return;
+    setEditing(person);
+    setSelectedRole(person.role);
+    setRemoveLogo(false);
+    setOpen(true);
+  };
+  const closeModal = () => {
+    setOpen(false);
+    setEditing(null);
+    setRemoveLogo(false);
+  };
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBusy(true);
@@ -64,21 +89,29 @@ export function PeoplePanel({ role }: { role: AppRole }) {
       const companyLogoDataUrl = logoFile instanceof File && logoFile.size > 0
         ? await readLogo(logoFile)
         : null;
-      await create({
-        data: {
+      const shared = {
+        fullName: String(fd.get("fullName")),
+        phone: String(fd.get("phone")),
+        role: String(fd.get("role")) as AppRole,
+        jobTitle: "",
+        team: selectedRole === "supervisor" ? String(fd.get("team")) : "",
+        companyName: selectedRole === "representative" ? String(fd.get("companyName")) : "",
+        managementName: selectedRole === "representative" ? String(fd.get("managementName")) : "",
+        managerId: String(fd.get("managerId") || "") || null,
+      };
+      if (editing) {
+        await update({ data: { ...shared, userId: editing.user_id, active: editing.active, companyLogoDataUrl, removeCompanyLogo: removeLogo } });
+        toast.success("Perfil atualizado com sucesso");
+      } else {
+        await create({ data: {
           email: String(fd.get("email")),
           password: String(fd.get("password")),
-          fullName: String(fd.get("fullName")),
-          phone: String(fd.get("phone")),
-          role: String(fd.get("role")) as AppRole,
-          jobTitle: "",
-          team: String(fd.get("team")),
-          managerId: String(fd.get("managerId") || "") || null,
+          ...shared,
           companyLogoDataUrl,
-        },
-      });
-      toast.success("Acesso criado com sucesso");
-      setOpen(false);
+        } });
+        toast.success("Acesso criado com sucesso");
+      }
+      closeModal();
       await refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível criar o acesso.");
@@ -99,6 +132,10 @@ export function PeoplePanel({ role }: { role: AppRole }) {
           team: person.team,
           managerId: person.manager_id,
           active: !person.active,
+          companyName: person.company_name,
+          managementName: person.management_name,
+          companyLogoDataUrl: null,
+          removeCompanyLogo: false,
         },
       });
       toast.success(person.active ? "Acesso desativado" : "Acesso reativado");
@@ -119,9 +156,9 @@ export function PeoplePanel({ role }: { role: AppRole }) {
         </div>
         {choices.length > 0 && (
           <div className="panel-actions">
-            <button className="primary-btn" onClick={() => setOpen(true)}>
+            <Button className="primary-btn" onClick={openCreate}>
               <UserPlus size={16} /> Adicionar pessoa
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -143,7 +180,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
               <th>PESSOA</th>
               <th>CONTATO</th>
               <th>FUNÇÃO</th>
-              <th>EQUIPE</th>
+              <th>EMPRESA / EQUIPE</th>
               <th>ACESSO</th>
               <th />
             </tr>
@@ -164,7 +201,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                   </span>
                 </td>
                 <td>{p.role ? labels[p.role] : "—"}</td>
-                <td>{p.team || "Sem equipe"}</td>
+                <td>{p.role === "representative" ? p.company_name || "Sem empresa" : p.role === "supervisor" ? p.team || "Sem equipe" : "—"}</td>
                 <td>
                   <span className={`access-tag ${p.active ? "" : "inactive"}`}>
                     <Check size={13} /> {p.active ? "Ativo" : "Inativo"}
@@ -172,9 +209,16 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                 </td>
                 <td>
                   {p.role && choices.includes(p.role) && (
-                    <button className="ghost-btn" onClick={() => void toggle(p)}>
-                      {p.active ? "Desativar" : "Ativar"}
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="people-menu-trigger" aria-label={`Opções de ${p.full_name}`}><MoreHorizontal /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="people-menu-content">
+                        <DropdownMenuItem onSelect={() => openEdit(p)}><Pencil /> Editar perfil</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className={p.active ? "people-menu-danger" : ""} onSelect={() => void toggle(p)}><Power /> {p.active ? "Desativar acesso" : "Ativar acesso"}</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </td>
               </tr>
@@ -184,30 +228,31 @@ export function PeoplePanel({ role }: { role: AppRole }) {
       </div>
       {open && (
         <div className="modal-backdrop">
-          <form className="sale-modal" onSubmit={submit}>
+          <form className="sale-modal" onSubmit={submit} key={editing?.user_id ?? "new"}>
             <div className="modal-head">
               <div>
-                <span className="panel-kicker">NOVO ACESSO</span>
-                <h3>Adicionar pessoa</h3>
+                <span className="panel-kicker">{editing ? "EDITAR PERFIL" : "NOVO ACESSO"}</span>
+                <h3>{editing ? editing.full_name : "Adicionar pessoa"}</h3>
               </div>
-              <button type="button" onClick={() => setOpen(false)}>
+              <Button variant="ghost" size="icon" type="button" onClick={closeModal}>
                 <X />
-              </button>
+              </Button>
             </div>
             <div className="form-grid">
               <label>
                 Nome
-                <input name="fullName" required minLength={3} />
+                <input name="fullName" required minLength={3} defaultValue={editing?.full_name} />
               </label>
               <label>
                 Telefone
-                <input name="phone" type="tel" required minLength={10} maxLength={20} />
+                <input name="phone" type="tel" required minLength={10} maxLength={20} defaultValue={editing?.phone} />
               </label>
-              <label>
+              {!editing && <label>
                 E-mail
                 <input name="email" type="email" required />
-              </label>
-              <label>
+              </label>}
+              {editing && <label>E-mail<input value={editing.email} disabled /></label>}
+              {!editing && <label>
                 Senha inicial
                 <input
                   name="password"
@@ -218,10 +263,10 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                   title="Use ao menos 10 caracteres, com maiúscula, minúscula, número e símbolo."
                   required
                 />
-              </label>
+              </label>}
               <label>
                 Função
-                <select name="role">
+                <select name="role" value={selectedRole} onChange={(event) => setSelectedRole(event.target.value as AppRole)}>
                   {choices.map((key) => (
                     <option value={key} key={key}>
                       {labels[key]}
@@ -229,19 +274,28 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                   ))}
                 </select>
               </label>
-              <label>
+              {selectedRole === "supervisor" && <label>
                 Equipe
-                <input name="team" required placeholder="Nome da equipe" />
-              </label>
-              <label className="company-logo-field">
+                <input name="team" required placeholder="Nome da equipe" defaultValue={editing?.team} />
+              </label>}
+              {selectedRole === "representative" && <label>
+                Nome da empresa
+                <input name="companyName" required placeholder="Nome da empresa" defaultValue={editing?.company_name} />
+              </label>}
+              {selectedRole === "representative" && <label>
+                Gestão
+                <input name="managementName" required placeholder="Nome da gestão" defaultValue={editing?.management_name} />
+              </label>}
+              {selectedRole === "representative" && <label className="company-logo-field">
                 Logomarca da empresa (opcional)
                 <span className="file-picker"><ImagePlus size={18} /> Escolher imagem</span>
                 <input name="companyLogo" type="file" accept="image/png,image/jpeg,image/webp" />
-                <small>PNG, JPG ou WEBP · máximo 2 MB</small>
-              </label>
+                <small>PNG, JPG ou WEBP · máximo 50 MB</small>
+              </label>}
+              {editing?.company_logo_url && selectedRole === "representative" && <div className="logo-edit-preview"><img src={editing.company_logo_url} alt={`Logo atual de ${editing.full_name}`} /><Button type="button" variant="outline" size="sm" onClick={() => setRemoveLogo((value) => !value)}><Trash2 /> {removeLogo ? "Manter logo atual" : "Remover logo"}</Button></div>}
               <label>
                 Superior
-                <select name="managerId">
+                 <select name="managerId" defaultValue={editing?.manager_id ?? ""}>
                   <option value="">Vincular a mim</option>
                   {people
                     .filter((p) => p.active)
@@ -254,12 +308,12 @@ export function PeoplePanel({ role }: { role: AppRole }) {
               </label>
             </div>
             <div className="modal-actions">
-              <button type="button" className="outline-btn" onClick={() => setOpen(false)}>
+              <Button type="button" variant="outline" className="outline-btn" onClick={closeModal}>
                 Cancelar
-              </button>
-              <button className="primary-btn" disabled={busy}>
-                {busy ? "Criando..." : "Criar acesso"}
-              </button>
+              </Button>
+              <Button className="primary-btn" disabled={busy}>
+                {busy ? "Salvando..." : editing ? "Salvar alterações" : "Criar acesso"}
+              </Button>
             </div>
           </form>
         </div>

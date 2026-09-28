@@ -45,3 +45,8 @@
 - [x] Reduzir a tela preta da Central TV para 3 segundos
 - [x] Bloquear cadastro público administrativo após o primeiro Director
 - [x] Reforçar requisitos de senha para novos acessos
+- [x] Ampliar logomarcas de empresas para até 50 MB
+- [x] Exibir equipe somente para Supervisor e empresa/gestão para Representante
+- [x] Permitir editar perfil, empresa, equipe e logomarca pelo menu de opções
+- [x] Melhorar os gráficos da visão geral com dados reais
+- [x] Destacar a logomarca da empresa do Representante na venda da Central TV
