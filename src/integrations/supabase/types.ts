@@ -120,6 +120,7 @@ export type Database = {
           active: boolean
           avatar_url: string | null
           company_logo_path: string | null
+          company_name: string
           created_at: string
           created_by: string | null
           email: string
@@ -138,6 +139,7 @@ export type Database = {
           active?: boolean
           avatar_url?: string | null
           company_logo_path?: string | null
+          company_name?: string
           created_at?: string
           created_by?: string | null
           email?: string
@@ -156,6 +158,7 @@ export type Database = {
           active?: boolean
           avatar_url?: string | null
           company_logo_path?: string | null
+          company_name?: string
           created_at?: string
           created_by?: string | null
           email?: string
