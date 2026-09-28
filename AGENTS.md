@@ -12,3 +12,4 @@
 - Store user-uploaded company logos in the private `company-logos` bucket and expose only temporary signed URLs, because team branding is authenticated data.
 - Load the uploaded sale-bell MP3 through a Lovable asset pointer and play it only when a sale starts the Central TV blackout, because Web Push sound is controlled by the mobile operating system.
 - Use the uploaded Dábliu W artwork for the installed-app icons and favicon so mobile home screens show the current brand.
+- Allow the public account setup only while no Director exists; all later accounts must be created through the authenticated hierarchy, because public role selection enables privilege escalation.

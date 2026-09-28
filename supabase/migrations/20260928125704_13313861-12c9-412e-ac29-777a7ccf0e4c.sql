@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.prevent_additional_director() FROM PUBLIC, anon, authenticated;

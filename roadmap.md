@@ -40,3 +40,8 @@
 - [x] Remover texto de origem do conteúdo das notificações; identificação do sistema é controlada pelo aparelho
 - [x] Adicionar gráficos e percentual de progresso às metas
 - [x] Usar o áudio enviado somente no início do alerta preto da Central TV
+- [x] Exibir gráficos visuais e percentuais nas metas
+- [x] Mostrar a logomarca no alerta preto e manter a marca no ícone instalado
+- [x] Reduzir a tela preta da Central TV para 3 segundos
+- [x] Bloquear cadastro público administrativo após o primeiro Director
+- [x] Reforçar requisitos de senha para novos acessos

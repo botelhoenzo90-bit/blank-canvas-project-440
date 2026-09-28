@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
+  BarChart3,
   Bell,
   CalendarDays,
   Check,
@@ -1079,6 +1080,18 @@ function GoalsView({ goals, people, sales, role, onSave }: {
         {eligible.length > 0 && <button className="primary-btn" onClick={() => setOpen(true)}><Plus size={16} /> Criar meta</button>}
       </div>
       {goals.length ? (
+        <>
+        <div className="goals-chart-summary" aria-label="Comparativo de metas">
+          <div className="goals-chart-title"><BarChart3 size={20} /><div><strong>Progresso geral</strong><span>Comparativo das metas cadastradas</span></div></div>
+          <div className="goals-chart-bars">
+            {goals.slice(0, 8).map((goal) => {
+              const month = goal.period_month.slice(0, 7);
+              const achieved = sales.filter((sale) => sale.status === "Confirmada" && sale.date.startsWith(month) && sale.ownerId === goal.target_user_id).reduce((sum, sale) => sum + sale.value, 0);
+              const percentage = Number(goal.amount) > 0 ? Math.min(100, Math.round((achieved / Number(goal.amount)) * 100)) : 0;
+              return <div className="goals-chart-row" key={`chart-${goal.id}`}><span>{names.get(goal.target_user_id) ?? "Responsável"}</span><div><i style={{ width: `${percentage}%` }} /></div><strong>{percentage}%</strong></div>;
+            })}
+          </div>
+        </div>
         <div className="goal-grid">
           {goals.map((goal) => {
             const month = goal.period_month.slice(0, 7);
@@ -1092,8 +1105,13 @@ function GoalsView({ goals, people, sales, role, onSave }: {
             return (
               <article className="goal-card" key={goal.id}>
                 <div className="goal-card-head"><span>{new Date(`${goal.period_month}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span><strong>{percentage}%</strong></div>
-                <h3>{personName}</h3>
-                <p>{goal.target_role === "master" ? "Master" : goal.target_role === "representative" ? "Representante" : "Supervisor"}</p>
+                <div className="goal-card-main">
+                  <div className="goal-donut" aria-label={`${percentage}% da meta concluída`}>
+                    <svg viewBox="0 0 42 42" aria-hidden="true"><circle className="goal-donut-track" cx="21" cy="21" r="16" /><circle className="goal-donut-value" cx="21" cy="21" r="16" pathLength="100" strokeDasharray={`${percentage} 100`} /></svg>
+                    <strong>{percentage}%</strong>
+                  </div>
+                  <div><h3>{personName}</h3><p>{goal.target_role === "master" ? "Master" : goal.target_role === "representative" ? "Representante" : "Supervisor"}</p></div>
+                </div>
                 <div className="goal-values"><div><span>Realizado</span><strong>{money(achieved)}</strong></div><div><span>Meta</span><strong>{money(target)}</strong></div></div>
                 <div className="goal-progress" role="progressbar" aria-valuenow={percentage} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${percentage}%` }} /></div>
                 <div className="goal-foot"><span>{percentage >= 100 ? "Meta atingida" : `Faltam ${money(remaining)}`}</span><b>{percentage}% concluída</b></div>
@@ -1101,6 +1119,7 @@ function GoalsView({ goals, people, sales, role, onSave }: {
             );
           })}
         </div>
+        </>
       ) : <EmptyState text="Nenhuma meta foi cadastrada." />}
       {open && (
         <div className="modal-backdrop">
@@ -1377,12 +1396,12 @@ function TvPanel({
     playSaleChime();
     const bellTimer = window.setTimeout(() => {
       setAnnouncementStage("bell");
-    }, 5000);
-    const saleTimer = window.setTimeout(() => setAnnouncementStage("sale"), 15000);
+    }, 3000);
+    const saleTimer = window.setTimeout(() => setAnnouncementStage("sale"), 13000);
     const endTimer = window.setTimeout(() => {
       setAnnouncementStage("idle");
       setFeaturedSale(null);
-    }, 30000);
+    }, 28000);
     return () => {
       window.clearTimeout(bellTimer);
       window.clearTimeout(saleTimer);
@@ -1409,7 +1428,7 @@ function TvPanel({
         </button>
       </div>
       {featuredSale && announcementStage === "blackout" ? (
-        <section className="tv-alert-stage tv-blackout" aria-live="assertive" />
+        <section className="tv-alert-stage tv-blackout" aria-live="assertive"><img src={logo.url} alt="Dábliu Consórcios" className="tv-blackout-logo" /></section>
       ) : featuredSale && announcementStage === "bell" ? (
         <section className="tv-alert-stage tv-bell-stage" aria-live="assertive">
           <img src={logo.url} alt="Dábliu Consórcios" className="tv-alert-logo" />

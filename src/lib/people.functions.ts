@@ -12,7 +12,11 @@ const roleSchema = z.enum([
 ]);
 const personSchema = z.object({
   email: z.string().email().max(200),
-  password: z.string().min(8).max(72),
+  password: z.string().min(10).max(72)
+    .regex(/[a-z]/, "A senha precisa ter letra minúscula.")
+    .regex(/[A-Z]/, "A senha precisa ter letra maiúscula.")
+    .regex(/[0-9]/, "A senha precisa ter número.")
+    .regex(/[^A-Za-z0-9]/, "A senha precisa ter símbolo."),
   fullName: z.string().trim().min(3).max(120),
   phone: z.string().trim().min(10).max(20),
   role: roleSchema,
