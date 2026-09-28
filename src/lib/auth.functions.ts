@@ -6,22 +6,34 @@ const signupSchema = z.object({
   fullName: z.string().trim().min(3).max(120),
   phone: z.string().trim().min(10).max(20),
   email: z.string().trim().email().max(200),
-  password: z.string().min(8).max(72),
+  password: z.string().min(10).max(72)
+    .regex(/[a-z]/, "A senha precisa ter letra minúscula.")
+    .regex(/[A-Z]/, "A senha precisa ter letra maiúscula.")
+    .regex(/[0-9]/, "A senha precisa ter número.")
+    .regex(/[^A-Za-z0-9]/, "A senha precisa ter símbolo."),
   team: z.string().trim().min(2).max(100),
-  role: z.enum(["director", "master", "representative", "supervisor"]),
 });
 
-const roleTitles = {
-  director: "Presidente/Diretor",
-  master: "Master",
-  representative: "Representante",
-  supervisor: "Supervisor",
-} as const;
+export const getInitialSignupAvailability = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { count, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "director");
+  if (error) return { available: false };
+  return { available: count === 0 };
+});
 
 export const createAccount = createServerFn({ method: "POST" })
   .inputValidator((input) => signupSchema.parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { count, error: accessCheckError } = await supabaseAdmin
+      .from("user_roles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "director");
+    if (accessCheckError || count !== 0)
+      return { ok: false as const, reason: "signup_closed" as const };
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
@@ -39,7 +51,7 @@ export const createAccount = createServerFn({ method: "POST" })
       full_name: data.fullName,
       phone: data.phone,
       email: data.email,
-      job_title: roleTitles[data.role],
+      job_title: "Presidente/Diretor",
       team: data.team,
       manager_id: null,
       active: true,
@@ -50,7 +62,7 @@ export const createAccount = createServerFn({ method: "POST" })
     }
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
-      .insert({ user_id: userId, role: data.role });
+      .insert({ user_id: userId, role: "director" });
     if (roleError) {
       await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
       await supabaseAdmin.auth.admin.deleteUser(userId);

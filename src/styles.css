@@ -1444,12 +1444,42 @@ td {
   grid-template-columns: repeat(3, 1fr);
   gap: 13px;
 }
+.goals-chart-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(300px, 1.8fr);
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.goals-chart-title { display: flex; align-items: center; gap: 12px; }
+.goals-chart-title svg { color: var(--accent); }
+.goals-chart-title strong, .goals-chart-title span { display: block; }
+.goals-chart-title span { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.goals-chart-bars { display: grid; gap: 9px; }
+.goals-chart-row { display: grid; grid-template-columns: minmax(90px, 140px) 1fr 38px; gap: 10px; align-items: center; font-size: 10px; }
+.goals-chart-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goals-chart-row > div { height: 8px; overflow: hidden; border-radius: 4px; background: var(--surface); }
+.goals-chart-row i { display: block; min-width: 2px; height: 100%; border-radius: inherit; background: var(--accent); }
+.goals-chart-row strong { text-align: right; }
 .goal-card {
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
 }
+.goal-card-main { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.goal-card-main h3 { margin: 0; font-size: 15px; }
+.goal-card-main p { margin-top: 4px; }
+.goal-donut { position: relative; width: 76px; height: 76px; flex: 0 0 76px; }
+.goal-donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.goal-donut circle { fill: none; stroke-width: 5; }
+.goal-donut-track { stroke: var(--surface-2); }
+.goal-donut-value { stroke: var(--accent); stroke-linecap: round; }
+.goal-donut > strong { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; }
 .goal-card-head {
   display: flex;
   justify-content: space-between;
@@ -1783,12 +1813,14 @@ td {
   letter-spacing: 0;
 }
 .tv-alert-logo { position: absolute; top: 8vh; width: min(240px, 34vw); height: auto; filter: brightness(0) invert(1); }
+.tv-blackout-logo { width: min(290px, 46vw); height: auto; filter: brightness(0) invert(1); animation: tv-logo-reveal .8s ease-out both; }
+@keyframes tv-logo-reveal { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
 @keyframes tv-bell-ring {
   from { transform: rotate(-10deg) scale(0.96); }
   to { transform: rotate(10deg) scale(1.04); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tv-bell-stage svg { animation: none; }
+  .tv-bell-stage svg, .tv-blackout-logo { animation: none; }
 }
 .tv-top {
   display: flex;

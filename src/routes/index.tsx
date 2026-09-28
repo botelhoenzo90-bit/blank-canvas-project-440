@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, BarChart3, BellRing, LockKeyhole } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { createAccount } from "@/lib/auth.functions";
+import { createAccount, getInitialSignupAvailability } from "@/lib/auth.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import logo from "@/assets/dabliu-logo.png.asset.json";
 
@@ -34,7 +34,9 @@ export const Route = createFileRoute("/")({
 function LoginPage() {
   const navigate = useNavigate();
   const signup = useServerFn(createAccount);
+  const checkInitialSignup = useServerFn(getInitialSignupAvailability);
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
+  const [initialSignupAvailable, setInitialSignupAvailable] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -43,7 +45,8 @@ function LoginPage() {
     void supabase.auth.getUser().then(({ data }) => {
       if (data.user) void navigate({ to: "/dashboard", replace: true });
     });
-  }, [navigate]);
+    void checkInitialSignup().then((result) => setInitialSignupAvailable(result.available));
+  }, [checkInitialSignup, navigate]);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -58,18 +61,13 @@ function LoginPage() {
             email,
             password,
             team: String(form.get("team")),
-            role: String(form.get("role")) as
-              | "director"
-              | "master"
-              | "representative"
-              | "supervisor",
           },
         });
         if (!result.ok) {
           if (result.reason === "email_exists") {
             setMessage("Este e-mail já possui uma conta. Entre com sua senha ou recupere o acesso.");
           } else {
-            setMessage("Não foi possível criar a conta. Tente novamente.");
+              setMessage(result.reason === "signup_closed" ? "Novos acessos são criados pela gestão da equipe." : "Não foi possível criar a conta. Tente novamente.");
           }
           setBusy(false);
           return;
@@ -135,7 +133,7 @@ function LoginPage() {
           {mode === "forgot"
             ? "Informe seu e-mail para receber o link."
             : mode === "signup"
-              ? "Preencha seus dados e escolha sua função."
+              ? "Configure o primeiro acesso de Presidente/Diretor."
               : "Entre com seu e-mail e senha."}
         </p>
         <form onSubmit={submit}>
@@ -170,8 +168,10 @@ function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  minLength={8}
+                  minLength={mode === "signup" ? 10 : 8}
                   maxLength={72}
+                  pattern={mode === "signup" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{10,72}" : undefined}
+                  title={mode === "signup" ? "Use ao menos 10 caracteres, com maiúscula, minúscula, número e símbolo." : undefined}
                   autoComplete={mode === "signup" ? "new-password" : "current-password"}
                   required
                 />
@@ -181,15 +181,6 @@ function LoginPage() {
                   <label>
                     Equipe
                     <input name="team" minLength={2} maxLength={100} required />
-                  </label>
-                  <label>
-                    Função
-                    <select name="role" defaultValue="supervisor" required>
-                      <option value="director">Presidente/Diretor</option>
-                      <option value="master">Master</option>
-                      <option value="representative">Representante</option>
-                      <option value="supervisor">Supervisor</option>
-                    </select>
                   </label>
                 </>
               )}
@@ -209,9 +200,7 @@ function LoginPage() {
         </form>
         {mode === "login" && (
           <>
-            <button className="auth-link" onClick={() => setMode("signup")}>
-              Criar conta
-            </button>
+            {initialSignupAvailable && <button className="auth-link" onClick={() => setMode("signup")}>Configurar primeiro acesso</button>}
             <button className="auth-link" onClick={() => setMode("forgot")}>
               Esqueci minha senha
             </button>
