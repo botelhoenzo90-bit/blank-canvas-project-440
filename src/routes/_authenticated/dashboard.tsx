@@ -1154,33 +1154,64 @@ function hierarchyRanking(sales: Sale[], key: keyof Sale) {
   return [...map.values()].sort((a, b) => b.value - a.value);
 }
 
-function GoalsView({ goals, people, sales, role, onSave }: {
+function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, onDelete }: {
   goals: Goal[];
   people: Person[];
   sales: Sale[];
   role: "director" | "master" | "representative" | "supervisor";
+  currentUserId: string;
   onSave: (input: { targetUserId: string; amount: number; periodMonth: string }) => Promise<void>;
+  onEdit: (input: { goalId: string; targetUserId: string; amount: number; periodMonth: string }) => Promise<void>;
+  onDelete: (goalId: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
   const eligibleRoles = role === "director" ? ["master", "representative", "supervisor"] : role === "master" ? ["representative", "supervisor"] : role === "representative" ? ["supervisor"] : [];
   const eligible = people.filter((person) => person.active && person.role && eligibleRoles.includes(person.role));
   const names = new Map(people.map((person) => [person.user_id, person.full_name]));
+  const openCreate = () => {
+    setEditingGoal(null);
+    setOpen(true);
+  };
+  const openEdit = (goal: Goal) => {
+    setEditingGoal(goal);
+    setOpen(true);
+  };
+  const closeModal = () => {
+    setOpen(false);
+    setEditingGoal(null);
+  };
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setBusy(true);
     try {
-      await onSave({
+      const input = {
         targetUserId: String(form.get("targetUserId")),
         amount: Number(form.get("amount")),
         periodMonth: `${String(form.get("periodMonth"))}-01`,
-      });
-      setOpen(false);
+      };
+      if (editingGoal) await onEdit({ goalId: editingGoal.id, ...input });
+      else await onSave(input);
+      closeModal();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível cadastrar a meta.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar a meta.");
     } finally {
       setBusy(false);
+    }
+  };
+  const cancelGoal = async (goal: Goal) => {
+    const confirmed = window.confirm(`Cancelar a meta de ${names.get(goal.target_user_id) ?? "Responsável"}? Esta ação não pode ser desfeita.`);
+    if (!confirmed) return;
+    setDeletingGoalId(goal.id);
+    try {
+      await onDelete(goal.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a meta.");
+    } finally {
+      setDeletingGoalId(null);
     }
   };
   return (
@@ -1190,7 +1221,7 @@ function GoalsView({ goals, people, sales, role, onSave }: {
           <span className="panel-kicker">OBJETIVOS</span>
           <h3>Metas comerciais</h3>
         </div>
-        {eligible.length > 0 && <button className="primary-btn" onClick={() => setOpen(true)}><Plus size={16} /> Criar meta</button>}
+        {eligible.length > 0 && <Button className="primary-btn" onClick={openCreate}><Plus size={16} /> Criar meta</Button>}
       </div>
       {goals.length ? (
         <>
@@ -1215,9 +1246,19 @@ function GoalsView({ goals, people, sales, role, onSave }: {
             const target = Number(goal.amount);
             const percentage = target > 0 ? Math.min(100, Math.round((achieved / target) * 100)) : 0;
             const remaining = Math.max(0, target - achieved);
+            const canManage = role === "director" || goal.created_by === currentUserId;
             return (
               <article className="goal-card" key={goal.id}>
-                <div className="goal-card-head"><span>{new Date(`${goal.period_month}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span><strong>{percentage}%</strong></div>
+                <div className="goal-card-head">
+                  <span className="goal-card-period">{new Date(`${goal.period_month}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span>
+                  <div className="goal-card-actions">
+                    <strong className="goal-percentage">{percentage}%</strong>
+                    {canManage && <>
+                      <Button type="button" variant="ghost" size="icon" className="goal-action" aria-label={`Editar meta de ${personName}`} title="Editar meta" onClick={() => openEdit(goal)}><Pencil /></Button>
+                      <Button type="button" variant="ghost" size="icon" className="goal-action goal-action-danger" aria-label={`Cancelar meta de ${personName}`} title="Cancelar meta" disabled={deletingGoalId === goal.id} onClick={() => void cancelGoal(goal)}><Trash2 /></Button>
+                    </>}
+                  </div>
+                </div>
                 <div className="goal-card-main">
                   <div className="goal-donut" aria-label={`${percentage}% da meta concluída`}>
                     <svg viewBox="0 0 42 42" aria-hidden="true"><circle className="goal-donut-track" cx="21" cy="21" r="16" /><circle className="goal-donut-value" cx="21" cy="21" r="16" pathLength="100" strokeDasharray={`${percentage} 100`} /></svg>
@@ -1236,14 +1277,14 @@ function GoalsView({ goals, people, sales, role, onSave }: {
       ) : <EmptyState text="Nenhuma meta foi cadastrada." />}
       {open && (
         <div className="modal-backdrop">
-          <form className="sale-modal" onSubmit={submit}>
-            <div className="modal-head"><div><span className="panel-kicker">NOVA META</span><h3>Criar meta</h3></div><button type="button" onClick={() => setOpen(false)}><X size={19} /></button></div>
+          <form className="sale-modal" onSubmit={submit} key={editingGoal?.id ?? "new-goal"}>
+            <div className="modal-head"><div><span className="panel-kicker">{editingGoal ? "EDITAR META" : "NOVA META"}</span><h3>{editingGoal ? "Personalizar meta" : "Criar meta"}</h3></div><Button variant="ghost" size="icon" type="button" onClick={closeModal} aria-label="Fechar"><X size={19} /></Button></div>
             <div className="form-grid single">
-              <label>Responsável<select name="targetUserId" required autoFocus><option value="">Selecione</option>{eligible.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}</option>)}</select></label>
-              <label>Mês<input name="periodMonth" type="month" required /></label>
-              <label>Valor da meta<input name="amount" type="number" min="1" step="0.01" required /></label>
+              <label>Responsável<select name="targetUserId" required autoFocus defaultValue={editingGoal?.target_user_id ?? ""}><option value="">Selecione</option>{eligible.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}</option>)}</select></label>
+              <label>Mês<input name="periodMonth" type="month" required defaultValue={editingGoal?.period_month.slice(0, 7) ?? ""} /></label>
+              <label>Valor da meta<input name="amount" type="number" min="1" step="0.01" required defaultValue={editingGoal ? Number(editingGoal.amount) : undefined} /></label>
             </div>
-            <div className="modal-actions"><button type="button" className="outline-btn" onClick={() => setOpen(false)}>Cancelar</button><button className="primary-btn" disabled={busy}>{busy ? "Salvando..." : "Salvar meta"}</button></div>
+            <div className="modal-actions"><Button type="button" variant="outline" className="outline-btn" onClick={closeModal}>Voltar</Button><Button className="primary-btn" disabled={busy}>{busy ? "Salvando..." : editingGoal ? "Salvar alterações" : "Salvar meta"}</Button></div>
           </form>
         </div>
       )}
