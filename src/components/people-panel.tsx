@@ -42,10 +42,16 @@ const labels: Record<AppRole, string> = {
   supervisor: "Supervisor",
 };
 const allowedRoles: Record<AppRole, AppRole[]> = {
-  director: ["director", "master", "representative", "supervisor"],
+  director: ["master", "representative", "supervisor"],
   master: ["representative", "supervisor"],
   representative: ["supervisor"],
   supervisor: [],
+};
+const allowedManagerRoles: Record<AppRole, AppRole[]> = {
+  director: [],
+  master: ["director"],
+  representative: ["director", "master"],
+  supervisor: ["director", "master", "representative"],
 };
 
 export function PeoplePanel({ role }: { role: AppRole }) {
@@ -56,6 +62,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Person | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>(allowedRoles[role][0] ?? "supervisor");
+  const [selectedManagerId, setSelectedManagerId] = useState("");
   const [removeLogo, setRemoveLogo] = useState(false);
   const [busy, setBusy] = useState(false);
   const refresh = async () => setPeople((await load()) as Person[]);
@@ -65,6 +72,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
   const openCreate = () => {
     setEditing(null);
     setSelectedRole(choices[0] ?? "supervisor");
+    setSelectedManagerId("");
     setRemoveLogo(false);
     setOpen(true);
   };
@@ -72,12 +80,14 @@ export function PeoplePanel({ role }: { role: AppRole }) {
     if (!person.role) return;
     setEditing(person);
     setSelectedRole(person.role);
+    setSelectedManagerId(person.manager_id ?? "");
     setRemoveLogo(false);
     setOpen(true);
   };
   const closeModal = () => {
     setOpen(false);
     setEditing(null);
+    setSelectedManagerId("");
     setRemoveLogo(false);
   };
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -97,7 +107,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
         team: selectedRole === "supervisor" ? String(fd.get("team")) : "",
         companyName: selectedRole === "representative" ? String(fd.get("companyName")) : "",
         managementName: selectedRole === "master" ? String(fd.get("managementName")) : "",
-        managerId: String(fd.get("managerId") || "") || null,
+        managerId: selectedManagerId || null,
       };
       if (editing) {
         await update({ data: { ...shared, userId: editing.user_id, active: editing.active, companyLogoDataUrl, removeCompanyLogo: removeLogo } });
@@ -145,6 +155,13 @@ export function PeoplePanel({ role }: { role: AppRole }) {
     }
   };
   const choices = allowedRoles[role];
+  const managerChoices = people.filter(
+    (person) =>
+      person.active &&
+      person.role !== null &&
+      person.user_id !== editing?.user_id &&
+      allowedManagerRoles[selectedRole].includes(person.role),
+  );
 
   return (
     <section className="panel full-panel">
@@ -255,7 +272,13 @@ export function PeoplePanel({ role }: { role: AppRole }) {
               </label>}
               <label>
                 Função
-                <select name="role" value={selectedRole} onChange={(event) => setSelectedRole(event.target.value as AppRole)}>
+                <select name="role" value={selectedRole} onChange={(event) => {
+                  const nextRole = event.target.value as AppRole;
+                  setSelectedRole(nextRole);
+                  const selectedManager = people.find((person) => person.user_id === selectedManagerId);
+                  if (selectedManager?.role && !allowedManagerRoles[nextRole].includes(selectedManager.role))
+                    setSelectedManagerId("");
+                }}>
                   {choices.map((key) => (
                     <option value={key} key={key}>
                       {labels[key]}
@@ -284,15 +307,13 @@ export function PeoplePanel({ role }: { role: AppRole }) {
               {editing?.company_logo_url && selectedRole === "representative" && <div className="logo-edit-preview"><img src={editing.company_logo_url} alt={`Logo atual de ${editing.full_name}`} /><Button type="button" variant="outline" size="sm" onClick={() => setRemoveLogo((value) => !value)}><Trash2 /> {removeLogo ? "Manter logo atual" : "Remover logo"}</Button></div>}
               <label>
                 Superior
-                 <select name="managerId" defaultValue={editing?.manager_id ?? ""}>
+                 <select name="managerId" value={selectedManagerId} onChange={(event) => setSelectedManagerId(event.target.value)}>
                   <option value="">Vincular a mim</option>
-                  {people
-                    .filter((p) => p.active)
-                    .map((p) => (
+                   {managerChoices.map((p) => (
                       <option value={p.user_id} key={p.user_id}>
                         {p.full_name} · {p.role ? labels[p.role] : "Sem função"}
                       </option>
-                    ))}
+                     ))}
                 </select>
               </label>
             </div>

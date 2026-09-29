@@ -1996,10 +1996,19 @@ td {
   color: var(--ink);
   font-weight: 700;
 }
-.board-person b {
+.board-company-logo,
+.board-company-fallback {
   width: 29px;
   height: 29px;
+  flex: 0 0 29px;
   border-radius: 7px;
+}
+.board-company-logo {
+  object-fit: contain;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.board-company-fallback {
   background: var(--surface-2);
   color: var(--accent-strong);
   display: grid;

@@ -15,3 +15,4 @@
 - Allow the public account setup only while no Director exists; all later accounts must be created through the authenticated hierarchy, because public role selection enables privilege escalation.
 - Store company names on Representative profiles, management names only on Master profiles, and team names only on Supervisor profiles, because those labels belong to different hierarchy levels.
 - Mutate goals through authenticated server functions and user-scoped RLS; only the creator or a Director may edit or delete them.
+- Validate each profile manager against the role chain on the server, because incorrect links break hierarchy permissions and company branding.
