@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Check, ImagePlus, MoreHorizontal, Pencil, Power, ShieldCheck, Trash2, UserPlus, X } from "lucide-react";
+import { Check, ImagePlus, MoreHorizontal, Pencil, Power, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { createPerson, listPeople, updatePerson } from "@/lib/people.functions";
 import { Button } from "@/components/ui/button";
@@ -161,17 +161,6 @@ export function PeoplePanel({ role }: { role: AppRole }) {
             </Button>
           </div>
         )}
-      </div>
-      <div className="role-cards">
-        {Object.entries(labels).map(([key, label]) => (
-          <div className="role-card" key={key}>
-            <ShieldCheck size={18} />
-            <strong>{label}</strong>
-            <small>
-              {key === "director" ? "Administração total" : "Visão da própria estrutura"}
-            </small>
-          </div>
-        ))}
       </div>
       <div className="table-wrap">
         <table>

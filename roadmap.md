@@ -53,3 +53,6 @@
 - [x] Ampliar a Visão Geral com gráficos profissionais de evolução, composição, status e desempenho
 - [x] Remover vendas pendentes da Visão Geral
 - [x] Exibir Gestão somente no cadastro de Master
+- [x] Ampliar os dados da venda confirmada e manter a logo do Representante em destaque
+- [x] Remover os cards de cargos da gestão de equipe
+- [x] Permitir editar e cancelar metas com proteção por hierarquia
