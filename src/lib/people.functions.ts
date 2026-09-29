@@ -54,10 +54,16 @@ const inviteSchema = z.object({
 type AppRole = z.infer<typeof roleSchema>;
 type LogoPayload = { companyLogoDataUrl: string | null };
 const canCreate: Record<AppRole, AppRole[]> = {
-  director: ["director", "master", "representative", "supervisor"],
+  director: ["master", "representative", "supervisor"],
   master: ["representative", "supervisor"],
   representative: ["supervisor"],
   supervisor: [],
+};
+const allowedManagerRoles: Record<AppRole, AppRole[]> = {
+  director: [],
+  master: ["director"],
+  representative: ["director", "master"],
+  supervisor: ["director", "master", "representative"],
 };
 
 type AuthContext = { supabase: SupabaseClient<Database>; userId: string };
@@ -77,6 +83,28 @@ async function assertCanManage(context: AuthContext, targetRole: AppRole) {
   const actorRole = await getActorRole(context);
   if (!canCreate[actorRole].includes(targetRole))
     throw new Error("Seu cargo não pode criar ou alterar este nível de acesso.");
+}
+
+async function resolveManagerId(context: AuthContext, targetRole: AppRole, requestedManagerId: string | null) {
+  const managerId = requestedManagerId ?? context.userId;
+  const [{ data: manager }, { data: managerRoleRow }] = await Promise.all([
+    context.supabase
+      .from("profiles")
+      .select("user_id, active")
+      .eq("user_id", managerId)
+      .maybeSingle(),
+    context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", managerId)
+      .maybeSingle(),
+  ]);
+  const managerRole = roleSchema.safeParse(managerRoleRow?.role);
+  if (!manager?.active || !managerRole.success)
+    throw new Error("Selecione um superior ativo da sua estrutura.");
+  if (!allowedManagerRoles[targetRole].includes(managerRole.data))
+    throw new Error("O superior escolhido precisa estar acima deste cargo na hierarquia.");
+  return managerId;
 }
 
 async function decodeLogo(data: LogoPayload) {
@@ -128,7 +156,7 @@ export const listPeople = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     return Promise.all((profiles ?? []).map(async (profile) => {
       const signed = profile.company_logo_path
-        ? await supabaseAdmin.storage.from("company-logos").createSignedUrl(profile.company_logo_path, 3600)
+        ? await supabaseAdmin.storage.from("company-logos").createSignedUrl(profile.company_logo_path, 86400)
         : null;
       return {
         ...profile,
@@ -143,15 +171,7 @@ export const createPerson = createServerFn({ method: "POST" })
   .inputValidator((input) => personSchema.parse(input))
   .handler(async ({ data, context }) => {
     await assertCanManage(context, data.role);
-    if (data.managerId) {
-      const { data: manager } = await context.supabase
-        .from("profiles")
-        .select("user_id")
-        .eq("user_id", data.managerId)
-        .maybeSingle();
-      if (!manager) throw new Error("Selecione um superior da sua estrutura.");
-    }
-    const managerId = data.managerId ?? context.userId;
+    const managerId = await resolveManagerId(context, data.role, data.managerId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
@@ -227,6 +247,9 @@ export const updatePerson = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!visibleTarget || data.userId === context.userId)
       throw new Error("Você não pode alterar este acesso.");
+    const managerId = await resolveManagerId(context, data.role, data.managerId);
+    if (managerId === data.userId)
+      throw new Error("Uma pessoa não pode ser superior dela mesma.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: existingRole } = await supabaseAdmin
       .from("user_roles")
@@ -251,7 +274,7 @@ export const updatePerson = createServerFn({ method: "POST" })
         team: data.team,
          company_name: data.companyName,
          management_name: data.managementName,
-        manager_id: data.managerId,
+         manager_id: managerId,
         active: data.active,
         updated_by: context.userId,
       })

@@ -173,6 +173,38 @@ const initials = (name: string) =>
     .map((x) => x[0])
     .slice(0, 2)
     .join("");
+const representativeForSale = (sale: Sale, people: Person[]) => {
+  let person = sale.ownerId
+    ? people.find((item) => item.user_id === sale.ownerId) ?? null
+    : null;
+  const visited = new Set<string>();
+  while (person && !visited.has(person.user_id)) {
+    visited.add(person.user_id);
+    if (person.role === "representative") return person;
+    person = person.manager_id
+      ? people.find((item) => item.user_id === person?.manager_id) ?? null
+      : null;
+  }
+  return people.find(
+    (item) => item.role === "representative" && item.full_name === sale.representative,
+  ) ?? null;
+};
+
+function CompanyLogoMark({ sale, people }: { sale: Sale; people: Person[] }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const representative = representativeForSale(sale, people);
+  const companyName = representative?.company_name || sale.sellerCompany;
+  if (representative?.company_logo_url && !imageFailed)
+    return (
+      <img
+        src={representative.company_logo_url}
+        alt={`Logo de ${companyName}`}
+        className="board-company-logo"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  return <b className="board-company-fallback" aria-hidden="true">{initials(companyName)}</b>;
+}
 type SaleRow = import("@/integrations/supabase/types").Database["public"]["Tables"]["sales"]["Row"];
 const saleFromRow = (row: SaleRow): Sale => ({
   id: row.id,
@@ -1568,24 +1600,8 @@ function TvPanel({
     new Date(),
   );
   const todaySales = sales.filter((s) => s.date === today);
-  const representativeForSale = (() => {
-    if (!featuredSale) return null;
-    let person = featuredSale.ownerId
-      ? people.find((item) => item.user_id === featuredSale.ownerId) ?? null
-      : null;
-    const visited = new Set<string>();
-    while (person && !visited.has(person.user_id)) {
-      visited.add(person.user_id);
-      if (person.role === "representative") return person;
-      person = person.manager_id
-        ? people.find((item) => item.user_id === person?.manager_id) ?? null
-        : null;
-    }
-    return people.find(
-      (item) => item.role === "representative" && item.full_name === featuredSale.representative,
-    ) ?? null;
-  })();
-  const representativeLogo = representativeForSale?.company_logo_url ?? null;
+  const featuredRepresentative = featuredSale ? representativeForSale(featuredSale, people) : null;
+  const representativeLogo = featuredRepresentative?.company_logo_url ?? null;
   return (
     <div className="tv-screen">
       <div className="tv-top">
@@ -1611,7 +1627,7 @@ function TvPanel({
         </section>
       ) : featuredSale && announcementStage === "sale" ? (
         <section className="sale-celebration" aria-live="assertive">
-          {representativeLogo ? <img src={representativeLogo} alt={`Logo de ${representativeForSale?.company_name || featuredSale.sellerCompany}`} className="celebration-company-logo" /> : <div className="celebration-company-fallback">{initials(representativeForSale?.company_name || featuredSale.sellerCompany)}</div>}
+          {representativeLogo ? <img src={representativeLogo} alt={`Logo de ${featuredRepresentative?.company_name || featuredSale.sellerCompany}`} className="celebration-company-logo" /> : <div className="celebration-company-fallback">{initials(featuredRepresentative?.company_name || featuredSale.sellerCompany)}</div>}
           <span className="celebration-live">
             <i /> NOVA VENDA CONFIRMADA
           </span>
@@ -1651,7 +1667,7 @@ function TvPanel({
                 <div className={`board-row ${i === 0 ? "highlight" : ""}`} key={s.id}>
                   <strong>{s.time}</strong>
                   <span className="board-person">
-                     <b>{initials(s.sellerCompany)}</b>
+                      <CompanyLogoMark sale={s} people={people} />
                      {s.sellerCompany}
                   </span>
                    <span>{s.city}</span>
