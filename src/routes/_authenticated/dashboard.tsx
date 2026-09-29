@@ -18,6 +18,7 @@ import {
   MonitorPlay,
   MoreHorizontal,
   LogOut,
+  Pencil,
   Plus,
   Search,
   Share2,
@@ -25,6 +26,7 @@ import {
   ShieldCheck,
   Smartphone,
   Target,
+  Trash2,
   TrendingUp,
   Trophy,
   Users,
@@ -48,12 +50,13 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { cancelSale, createSaleAndNotify, registerPushDevice } from "@/lib/sales.functions";
-import { createGoal, listGoals } from "@/lib/goals.functions";
+import { createGoal, deleteGoal, listGoals, updateGoal } from "@/lib/goals.functions";
 import { enablePushNotifications } from "@/lib/push";
 import { getMyAccess } from "@/lib/auth.functions";
 import { PeoplePanel, type Person } from "@/components/people-panel";
 import { listPeople } from "@/lib/people.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import logo from "@/assets/dabliu-logo.png.asset.json";
 import saleBell from "@/assets/dabliu-sale-bell.mp3.asset.json";
 
@@ -202,6 +205,7 @@ function DabliuApp() {
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
+  const [currentUserId, setCurrentUserId] = useState("");
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessPending, setAccessPending] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -220,6 +224,8 @@ function DabliuApp() {
   const cancelSaleRequest = useServerFn(cancelSale);
   const loadGoals = useServerFn(listGoals);
   const saveGoal = useServerFn(createGoal);
+  const editGoalRequest = useServerFn(updateGoal);
+  const deleteGoalRequest = useServerFn(deleteGoal);
   const savePushDevice = useServerFn(registerPushDevice);
   const loadAccess = useServerFn(getMyAccess);
   const loadPeople = useServerFn(listPeople);
@@ -237,6 +243,7 @@ function DabliuApp() {
     setProfileName(access.profile?.full_name ?? "");
     setProfileEmail(access.profile?.email ?? "");
     setProfilePhone(access.profile?.phone ?? "");
+    setCurrentUserId(access.profile?.user_id ?? "");
     setAccessPending(access.pending);
     setAccessLoading(false);
   };
@@ -331,6 +338,18 @@ function DabliuApp() {
     await saveGoal({ data: input });
     setGoals((await loadGoals()) as Goal[]);
     toast.success("Meta cadastrada");
+  };
+
+  const editGoal = async (input: { goalId: string; targetUserId: string; amount: number; periodMonth: string }) => {
+    await editGoalRequest({ data: input });
+    setGoals((await loadGoals()) as Goal[]);
+    toast.success("Meta atualizada");
+  };
+
+  const removeGoal = async (goalId: string) => {
+    await deleteGoalRequest({ data: { goalId } });
+    setGoals((await loadGoals()) as Goal[]);
+    toast.success("Meta cancelada");
   };
 
   const activateNotifications = async () => {
@@ -643,7 +662,7 @@ function DabliuApp() {
             />
           )}
           {view === "ranking" && <RankingView sales={periodSales} />}
-          {view === "goals" && <GoalsView goals={goals} people={people} sales={sales} role={roleKey(role)} onSave={registerGoal} />}
+          {view === "goals" && <GoalsView goals={goals} people={people} sales={sales} role={roleKey(role)} currentUserId={currentUserId} onSave={registerGoal} onEdit={editGoal} onDelete={removeGoal} />}
           {view === "team" && <PeoplePanel role={roleKey(role)} />}
           {view === "reports" && <ReportsView sales={sales} />}
         </div>

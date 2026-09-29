@@ -1525,11 +1525,11 @@ td {
   color: var(--muted);
   font-size: 10px;
 }
-.goal-card-head button {
-  border: 0;
-  background: transparent;
-  color: #999;
-}
+.goal-card-period { text-transform: capitalize; }
+.goal-card-actions { display: flex; align-items: center; gap: 4px; }
+.goal-card-actions .goal-percentage { margin-right: 4px; color: var(--ink); font-size: 11px; }
+.goal-card-actions .goal-action { width: 30px; height: 30px; color: var(--muted); }
+.goal-card-actions .goal-action-danger { color: var(--danger); }
 .goal-card > span {
   display: block;
   color: #858a92;
@@ -2129,10 +2129,14 @@ td {
 .celebration-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 25px;
-  color: var(--muted);
-  font-size: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 28px;
+  color: var(--ink);
+  font-size: clamp(18px, 2vw, 26px);
+  font-weight: 850;
+  line-height: 1.25;
 }
 .celebration-meta i {
   width: 4px;
@@ -2342,9 +2346,7 @@ td {
   .goal-grid {
     grid-template-columns: 1fr;
   }
-  .role-cards {
-    grid-template-columns: 1fr 1fr;
-  }
+  .celebration-meta { gap: 9px; font-size: 16px; }
   .report-filters {
     grid-template-columns: 1fr 1fr;
   }
