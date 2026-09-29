@@ -51,3 +51,5 @@
 - [x] Melhorar os gráficos da visão geral com dados reais
 - [x] Destacar a logomarca da empresa do Representante na venda da Central TV
 - [x] Ampliar a Visão Geral com gráficos profissionais de evolução, composição, status e desempenho
+- [x] Remover vendas pendentes da Visão Geral
+- [x] Exibir Gestão somente no cadastro de Master

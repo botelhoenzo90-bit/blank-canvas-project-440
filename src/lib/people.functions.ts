@@ -26,7 +26,7 @@ const validateRoleFields = (data: { role: AppRole; team: string; companyName: st
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["team"], message: "Informe o nome da equipe." });
   if (data.role === "representative" && data.companyName.length < 2)
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["companyName"], message: "Informe o nome da empresa." });
-  if (data.role === "representative" && data.managementName.length < 2)
+  if (data.role === "master" && data.managementName.length < 2)
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["managementName"], message: "Informe o nome da gestão." });
 };
 const personSchema = z.object({
