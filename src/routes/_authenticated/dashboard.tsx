@@ -730,6 +730,7 @@ function Dashboard({
   avgTicket: number;
   period: string;
 }) {
+  const overviewSales = sales.filter((sale) => sale.status !== "Pendente");
   const confirmed = sales.filter((sale) => sale.status === "Confirmada");
   const dailyMap = new Map<string, number>();
   confirmed.forEach((sale) => dailyMap.set(sale.date, (dailyMap.get(sale.date) ?? 0) + sale.value));
@@ -747,7 +748,6 @@ function Dashboard({
     .map(([name, value]) => ({ name, value }));
   const statusData = [
     { name: "Confirmadas", value: sales.filter((sale) => sale.status === "Confirmada").length, color: "var(--chart-success)" },
-    { name: "Pendentes", value: sales.filter((sale) => sale.status === "Pendente").length, color: "var(--chart-warning)" },
     { name: "Canceladas", value: sales.filter((sale) => sale.status === "Cancelada").length, color: "var(--chart-danger)" },
   ];
   const activeStatusData = statusData.filter((item) => item.value > 0);
@@ -791,13 +791,13 @@ function Dashboard({
           icon={<CircleDollarSign />}
           label="Vendas hoje"
           value={money(todayTotal)}
-          sub={`${sales.filter((sale) => sale.date === new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date())).length} operações`}
+           sub={`${overviewSales.filter((sale) => sale.date === new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date())).length} operações`}
         />
         <Metric
           icon={<CalendarDays />}
           label={`Resultado · ${period.toLowerCase()}`}
           value={money(periodTotal)}
-          sub={`${sales.length} operações`}
+           sub={`${overviewSales.length} operações`}
         />
         <Metric
           icon={<Activity />}
@@ -857,7 +857,7 @@ function Dashboard({
               <h3>Ranking de responsáveis</h3>
             </div>
           </div>
-          {sales.length ? (
+          {overviewSales.length ? (
             <div className="rank-list">
               {sellerRanking(sales)
                 .slice(0, 5)
@@ -887,9 +887,9 @@ function Dashboard({
               <span className="live-dot" /> LIVE
             </span>
           </div>
-          {sales.length ? (
+          {overviewSales.length ? (
             <div className="sales-feed">
-              {sales.slice(0, 5).map((s) => (
+              {overviewSales.slice(0, 5).map((s) => (
                 <div className="feed-row" key={s.id}>
                   <div className="feed-avatar">{initials(s.seller)}</div>
                   <div>

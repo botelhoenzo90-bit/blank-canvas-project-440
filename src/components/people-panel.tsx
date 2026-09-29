@@ -96,7 +96,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
         jobTitle: "",
         team: selectedRole === "supervisor" ? String(fd.get("team")) : "",
         companyName: selectedRole === "representative" ? String(fd.get("companyName")) : "",
-        managementName: selectedRole === "representative" ? String(fd.get("managementName")) : "",
+        managementName: selectedRole === "master" ? String(fd.get("managementName")) : "",
         managerId: String(fd.get("managerId") || "") || null,
       };
       if (editing) {
@@ -201,7 +201,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                   </span>
                 </td>
                 <td>{p.role ? labels[p.role] : "—"}</td>
-                <td>{p.role === "representative" ? p.company_name || "Sem empresa" : p.role === "supervisor" ? p.team || "Sem equipe" : "—"}</td>
+                <td>{p.role === "representative" ? p.company_name || "Sem empresa" : p.role === "master" ? p.management_name || "Sem gestão" : p.role === "supervisor" ? p.team || "Sem equipe" : "—"}</td>
                 <td>
                   <span className={`access-tag ${p.active ? "" : "inactive"}`}>
                     <Check size={13} /> {p.active ? "Ativo" : "Inativo"}
@@ -282,7 +282,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                 Nome da empresa
                 <input name="companyName" required placeholder="Nome da empresa" defaultValue={editing?.company_name} />
               </label>}
-              {selectedRole === "representative" && <label>
+              {selectedRole === "master" && <label>
                 Gestão
                 <input name="managementName" required placeholder="Nome da gestão" defaultValue={editing?.management_name} />
               </label>}

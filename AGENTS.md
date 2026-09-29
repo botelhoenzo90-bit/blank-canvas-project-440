@@ -13,4 +13,4 @@
 - Load the uploaded sale-bell MP3 through a Lovable asset pointer and play it only when a sale starts the Central TV blackout, because Web Push sound is controlled by the mobile operating system.
 - Use the uploaded Dábliu W artwork for the installed-app icons and favicon so mobile home screens show the current brand.
 - Allow the public account setup only while no Director exists; all later accounts must be created through the authenticated hierarchy, because public role selection enables privilege escalation.
-- Store company and management names on Representative profiles, and team names only on Supervisor profiles, because those labels belong to different hierarchy levels.
+- Store company names on Representative profiles, management names only on Master profiles, and team names only on Supervisor profiles, because those labels belong to different hierarchy levels.
