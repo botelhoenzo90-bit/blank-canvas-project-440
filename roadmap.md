@@ -56,3 +56,4 @@
 - [x] Ampliar os dados da venda confirmada e manter a logo do Representante em destaque
 - [x] Remover os cards de cargos da gestão de equipe
 - [x] Permitir editar e cancelar metas com proteção por hierarquia
+- [x] Vincular a logo da venda ao Representante responsável pelo Supervisor

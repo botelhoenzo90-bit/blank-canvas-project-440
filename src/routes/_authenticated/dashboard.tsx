@@ -1568,9 +1568,24 @@ function TvPanel({
     new Date(),
   );
   const todaySales = sales.filter((s) => s.date === today);
-  const representativeLogo = featuredSale
-    ? people.find((person) => person.role === "representative" && person.full_name === featuredSale.representative)?.company_logo_url ?? null
-    : null;
+  const representativeForSale = (() => {
+    if (!featuredSale) return null;
+    let person = featuredSale.ownerId
+      ? people.find((item) => item.user_id === featuredSale.ownerId) ?? null
+      : null;
+    const visited = new Set<string>();
+    while (person && !visited.has(person.user_id)) {
+      visited.add(person.user_id);
+      if (person.role === "representative") return person;
+      person = person.manager_id
+        ? people.find((item) => item.user_id === person?.manager_id) ?? null
+        : null;
+    }
+    return people.find(
+      (item) => item.role === "representative" && item.full_name === featuredSale.representative,
+    ) ?? null;
+  })();
+  const representativeLogo = representativeForSale?.company_logo_url ?? null;
   return (
     <div className="tv-screen">
       <div className="tv-top">
@@ -1596,7 +1611,7 @@ function TvPanel({
         </section>
       ) : featuredSale && announcementStage === "sale" ? (
         <section className="sale-celebration" aria-live="assertive">
-          {representativeLogo ? <img src={representativeLogo} alt={`Logo de ${featuredSale.sellerCompany}`} className="celebration-company-logo" /> : <div className="celebration-company-fallback">{initials(featuredSale.sellerCompany)}</div>}
+          {representativeLogo ? <img src={representativeLogo} alt={`Logo de ${representativeForSale?.company_name || featuredSale.sellerCompany}`} className="celebration-company-logo" /> : <div className="celebration-company-fallback">{initials(representativeForSale?.company_name || featuredSale.sellerCompany)}</div>}
           <span className="celebration-live">
             <i /> NOVA VENDA CONFIRMADA
           </span>
