@@ -156,7 +156,7 @@ export const listPeople = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     return Promise.all((profiles ?? []).map(async (profile) => {
       const signed = profile.company_logo_path
-        ? await supabaseAdmin.storage.from("company-logos").createSignedUrl(profile.company_logo_path, 3600)
+        ? await supabaseAdmin.storage.from("company-logos").createSignedUrl(profile.company_logo_path, 86400)
         : null;
       return {
         ...profile,
