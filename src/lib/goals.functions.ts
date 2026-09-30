@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 const goalSchema = z.object({
   targetUserId: z.string().uuid(),
@@ -19,8 +21,8 @@ const allowedTargetRoles = {
 } as const;
 
 async function validateGoalTarget(
-  context: Parameters<Parameters<typeof requireSupabaseAuth>["options"]["server"]>[0] extends never ? never : {
-    supabase: any;
+  context: {
+    supabase: SupabaseClient<Database>;
     userId: string;
   },
   targetUserId: string,
