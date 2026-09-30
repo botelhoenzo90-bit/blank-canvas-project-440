@@ -1202,6 +1202,7 @@ function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, 
   const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
   const eligibleRoles = role === "director" ? ["master", "representative", "supervisor"] : role === "master" ? ["representative", "supervisor"] : role === "representative" ? ["supervisor"] : [];
   const eligible = people.filter((person) => person.active && person.role && eligibleRoles.includes(person.role));
+  const canCreateGoal = role !== "supervisor";
   const names = new Map(people.map((person) => [person.user_id, person.full_name]));
   const openCreate = () => {
     setEditingGoal(null);
@@ -1253,7 +1254,7 @@ function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, 
           <span className="panel-kicker">OBJETIVOS</span>
           <h3>Metas comerciais</h3>
         </div>
-        {eligible.length > 0 && <Button className="primary-btn" onClick={openCreate}><Plus size={16} /> Criar meta</Button>}
+        {canCreateGoal && <Button className="primary-btn" onClick={openCreate}><Plus size={16} /> Criar meta</Button>}
       </div>
       {goals.length ? (
         <>
@@ -1264,7 +1265,7 @@ function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, 
               const month = goal.period_month.slice(0, 7);
               const achieved = sales.filter((sale) => sale.status === "Confirmada" && sale.date.startsWith(month) && sale.ownerId === goal.target_user_id).reduce((sum, sale) => sum + sale.value, 0);
               const percentage = Number(goal.amount) > 0 ? Math.min(100, Math.round((achieved / Number(goal.amount)) * 100)) : 0;
-              return <div className="goals-chart-row" key={`chart-${goal.id}`}><span>{names.get(goal.target_user_id) ?? "Responsável"}</span><div><i style={{ width: `${percentage}%` }} /></div><strong>{percentage}%</strong></div>;
+              return <div className={`goals-chart-row goal-role-${goal.target_role}`} key={`chart-${goal.id}`}><span>{names.get(goal.target_user_id) ?? "Responsável"}</span><div><i style={{ width: `${percentage}%` }} /></div><strong>{percentage}%</strong></div>;
             })}
           </div>
         </div>
@@ -1280,7 +1281,7 @@ function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, 
             const remaining = Math.max(0, target - achieved);
             const canManage = role === "director" || goal.created_by === currentUserId;
             return (
-              <article className="goal-card" key={goal.id}>
+              <article className={`goal-card goal-role-${goal.target_role}`} key={goal.id}>
                 <div className="goal-card-head">
                   <span className="goal-card-period">{new Date(`${goal.period_month}T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span>
                   <div className="goal-card-actions">
@@ -1311,12 +1312,14 @@ function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, 
         <div className="modal-backdrop">
           <form className="sale-modal" onSubmit={submit} key={editingGoal?.id ?? "new-goal"}>
             <div className="modal-head"><div><span className="panel-kicker">{editingGoal ? "EDITAR META" : "NOVA META"}</span><h3>{editingGoal ? "Personalizar meta" : "Criar meta"}</h3></div><Button variant="ghost" size="icon" type="button" onClick={closeModal} aria-label="Fechar"><X size={19} /></Button></div>
-            <div className="form-grid single">
-              <label>Responsável<select name="targetUserId" required autoFocus defaultValue={editingGoal?.target_user_id ?? ""}><option value="">Selecione</option>{eligible.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}</option>)}</select></label>
-              <label>Mês<input name="periodMonth" type="month" required defaultValue={editingGoal?.period_month.slice(0, 7) ?? ""} /></label>
-              <label>Valor da meta<input name="amount" type="number" min="1" step="0.01" required defaultValue={editingGoal ? Number(editingGoal.amount) : undefined} /></label>
-            </div>
-            <div className="modal-actions"><Button type="button" variant="outline" className="outline-btn" onClick={closeModal}>Voltar</Button><Button className="primary-btn" disabled={busy}>{busy ? "Salvando..." : editingGoal ? "Salvar alterações" : "Salvar meta"}</Button></div>
+            {eligible.length ? <>
+              <div className="form-grid single">
+                <label>Responsável<select name="targetUserId" required autoFocus defaultValue={editingGoal?.target_user_id ?? ""}><option value="">Selecione</option>{eligible.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name} · {person.role === "master" ? "Master" : person.role === "representative" ? "Representante" : "Supervisor"}</option>)}</select></label>
+                <label>Mês<input name="periodMonth" type="month" required defaultValue={editingGoal?.period_month.slice(0, 7) ?? ""} /></label>
+                <label>Valor da meta<input name="amount" type="number" min="1" step="0.01" required defaultValue={editingGoal ? Number(editingGoal.amount) : undefined} /></label>
+              </div>
+              <div className="modal-actions"><Button type="button" variant="outline" className="outline-btn" onClick={closeModal}>Voltar</Button><Button className="primary-btn" disabled={busy}>{busy ? "Salvando..." : editingGoal ? "Salvar alterações" : "Salvar meta"}</Button></div>
+            </> : <div className="goal-empty-targets"><Users size={26} /><strong>Nenhuma pessoa disponível</strong><span>Cadastre ou vincule uma pessoa abaixo do seu cargo na Equipe e acessos antes de criar a meta.</span><Button type="button" variant="outline" onClick={closeModal}>Entendi</Button></div>}
           </form>
         </div>
       )}

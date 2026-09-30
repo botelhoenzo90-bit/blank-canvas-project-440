@@ -18,6 +18,28 @@ const allowedTargetRoles = {
   supervisor: [],
 } as const;
 
+async function validateGoalTarget(
+  context: Parameters<Parameters<typeof requireSupabaseAuth>["options"]["server"]>[0] extends never ? never : {
+    supabase: any;
+    userId: string;
+  },
+  targetUserId: string,
+) {
+  const [{ data: actorRoleRow }, { data: targetRoleRow }, { data: visibleTarget }] = await Promise.all([
+    context.supabase.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle(),
+    context.supabase.from("user_roles").select("role").eq("user_id", targetUserId).maybeSingle(),
+    context.supabase.from("profiles").select("user_id, active").eq("user_id", targetUserId).maybeSingle(),
+  ]);
+  const actorRole = actorRoleRow?.role;
+  const targetRole = targetRoleRow?.role;
+  if (!actorRole || !targetRole || !visibleTarget?.active)
+    throw new Error("Selecione uma pessoa ativa da sua estrutura.");
+  const allowed = allowedTargetRoles[actorRole as keyof typeof allowedTargetRoles] ?? [];
+  if (!(allowed as readonly string[]).includes(targetRole))
+    throw new Error("Seu cargo não pode definir uma meta para esta pessoa.");
+  return targetRole;
+}
+
 export const listGoals = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -33,16 +55,10 @@ export const createGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => goalSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: roleRow } = await context.supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.targetUserId)
-      .maybeSingle();
-    if (!roleRow || !["master", "representative", "supervisor"].includes(roleRow.role))
-      throw new Error("Selecione um Master, Representante ou Supervisor.");
+    const targetRole = await validateGoalTarget(context, data.targetUserId);
     const { error } = await context.supabase.from("goals").insert({
       target_user_id: data.targetUserId,
-      target_role: roleRow.role,
+      target_role: targetRole,
       amount: data.amount,
       period_month: data.periodMonth,
       created_by: context.userId,
@@ -55,18 +71,7 @@ export const updateGoal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => updateGoalSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const [{ data: actorRoleRow }, { data: targetRoleRow }, { data: visibleTarget }] = await Promise.all([
-      context.supabase.from("user_roles").select("role").eq("user_id", context.userId).maybeSingle(),
-      context.supabase.from("user_roles").select("role").eq("user_id", data.targetUserId).maybeSingle(),
-      context.supabase.from("profiles").select("user_id").eq("user_id", data.targetUserId).maybeSingle(),
-    ]);
-    const actorRole = actorRoleRow?.role;
-    const targetRole = targetRoleRow?.role;
-    if (!actorRole || !targetRole || !visibleTarget)
-      throw new Error("Selecione uma pessoa da sua estrutura.");
-    const allowed = allowedTargetRoles[actorRole as keyof typeof allowedTargetRoles] ?? [];
-    if (!(allowed as readonly string[]).includes(targetRole))
-      throw new Error("Você não pode definir uma meta para este cargo.");
+    const targetRole = await validateGoalTarget(context, data.targetUserId);
     const { data: goal, error } = await context.supabase
       .from("goals")
       .update({
