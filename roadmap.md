@@ -58,3 +58,5 @@
 - [x] Permitir editar e cancelar metas com proteção por hierarquia
 - [x] Vincular a logo da venda ao Representante responsável pelo Supervisor
 - [x] Validar superiores por nível hierárquico e mostrar logos na coluna Empresa da Central TV
+- [ ] Corrigir criação de metas por hierarquia e diferenciar os cargos por cor
+- [ ] Revisar permissões, progresso e vínculos relacionados às metas
