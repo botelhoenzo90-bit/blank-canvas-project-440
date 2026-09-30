@@ -27,6 +27,12 @@
   --chart-success: #20b486;
   --chart-warning: #d99a44;
   --chart-danger: #e45d69;
+  --goal-master: #35689d;
+  --goal-master-soft: #edf4fb;
+  --goal-representative: #20a47c;
+  --goal-representative-soft: #e9f8f2;
+  --goal-supervisor: #d1872e;
+  --goal-supervisor-soft: #fff5e7;
   --radius: 10px;
 }
 :root[data-theme="dark"] {
@@ -54,6 +60,12 @@
   --chart-success: #4bc59b;
   --chart-warning: #e8ad63;
   --chart-danger: #ef7c86;
+  --goal-master: #73a3d1;
+  --goal-master-soft: #1b2b39;
+  --goal-representative: #4bc59b;
+  --goal-representative-soft: #17352d;
+  --goal-supervisor: #e8ad63;
+  --goal-supervisor-soft: #382b1b;
 }
 * {
   box-sizing: border-box;
@@ -1503,12 +1515,18 @@ td {
 .goals-chart-row > div { height: 8px; overflow: hidden; border-radius: 4px; background: var(--surface); }
 .goals-chart-row i { display: block; min-width: 2px; height: 100%; border-radius: inherit; background: var(--accent); }
 .goals-chart-row strong { text-align: right; }
+.goal-role-master { --goal-role-color: var(--goal-master); --goal-role-soft: var(--goal-master-soft); }
+.goal-role-representative { --goal-role-color: var(--goal-representative); --goal-role-soft: var(--goal-representative-soft); }
+.goal-role-supervisor { --goal-role-color: var(--goal-supervisor); --goal-role-soft: var(--goal-supervisor-soft); }
+.goals-chart-row[class*="goal-role-"] i { background: var(--goal-role-color); }
+.goals-chart-row[class*="goal-role-"] strong { color: var(--goal-role-color); }
 .goal-card {
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
 }
+.goal-card[class*="goal-role-"] { border-top: 4px solid var(--goal-role-color); background: linear-gradient(180deg, var(--goal-role-soft), var(--surface) 38%); }
 .goal-card-main { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
 .goal-card-main h3 { margin: 0; font-size: 15px; }
 .goal-card-main p { margin-top: 4px; }
@@ -1516,7 +1534,7 @@ td {
 .goal-donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .goal-donut circle { fill: none; stroke-width: 5; }
 .goal-donut-track { stroke: var(--surface-2); }
-.goal-donut-value { stroke: var(--accent); stroke-linecap: round; }
+.goal-donut-value { stroke: var(--goal-role-color, var(--accent)); stroke-linecap: round; }
 .goal-donut > strong { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; }
 .goal-card-head {
   display: flex;
@@ -1573,7 +1591,11 @@ td {
 .goal-values span { display: block; color: var(--muted); font-size: 9px; }
 .goal-values strong { display: block; margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }
 .goal-progress { height: 10px; margin-top: 16px; overflow: hidden; border-radius: 5px; background: var(--surface-2); }
-.goal-progress i { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--accent); transition: width 0.5s ease; }
+.goal-progress i { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--goal-role-color, var(--accent)); transition: width 0.5s ease; }
+.goal-empty-targets { display: grid; justify-items: center; gap: 10px; padding: 34px 18px 12px; text-align: center; }
+.goal-empty-targets svg { color: var(--muted); }
+.goal-empty-targets span { max-width: 390px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.goal-empty-targets button { margin-top: 8px; }
 .company-logo-thumb, .company-logo-fallback { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 6px; }
 .company-logo-thumb { object-fit: contain; background: var(--surface); border: 1px solid var(--line); }
 .company-logo-fallback { display: grid; place-items: center; background: var(--surface-2); color: var(--accent-strong); font-weight: 850; }
