@@ -976,6 +976,9 @@ button {
 .overview-chart-panel .panel-head > svg { color: var(--accent-strong); }
 .rechart-frame { width: 100%; height: 280px; margin-top: 14px; }
 .category-rechart, .performance-rechart { height: 250px; }
+.performance-chart-panel { min-width: 0; }
+.performance-rechart { height: 290px; }
+.performance-rechart .recharts-cartesian-axis-tick text { font-weight: 700; }
 .rechart-frame .recharts-tooltip-label { color: var(--muted); font-weight: 750; margin-bottom: 3px; }
 .status-chart-layout { min-height: 280px; display: grid; grid-template-columns: minmax(150px, .9fr) minmax(160px, 1fr); align-items: center; gap: 18px; }
 .donut-wrap { width: min(210px, 100%); aspect-ratio: 1; position: relative; justify-self: center; }
@@ -2358,6 +2361,8 @@ td {
   }
   .overview-chart-wide { grid-column: auto; }
   .rechart-frame { height: 240px; }
+  .performance-rechart { height: 280px; }
+  .performance-rechart .recharts-cartesian-axis-tick text { font-size: 9px; }
   .status-chart-layout { min-height: 0; grid-template-columns: 1fr; padding-top: 12px; }
   .donut-wrap { width: 170px; }
   .daily-chart { gap: 5px; }
