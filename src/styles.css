@@ -752,6 +752,11 @@ button {
 .result-person-filter span { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .result-person-filter input { width: 100%; height: 37px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); padding: 0 11px; font-size: 11px; font-weight: 700; }
 .result-person-filter input::placeholder { color: var(--muted); font-weight: 600; }
+.result-person-chips { display: flex; flex-wrap: wrap; gap: 5px; max-width: min(520px, 58vw); }
+.result-person-chip { display: inline-flex; align-items: center; gap: 3px; min-width: 0; height: 27px; padding-left: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--ink); font-size: 9px; font-weight: 750; }
+.result-person-chip > button { width: 25px; height: 25px; min-width: 25px; color: var(--muted); }
+.result-person-chip svg { width: 12px; height: 12px; }
+.result-clear { height: 27px; color: var(--muted); font-size: 9px; }
 .periods {
   display: flex;
   gap: 3px;
@@ -2327,6 +2332,7 @@ td {
   }
   .results-filters { align-items: stretch; flex-direction: column; flex: 1; }
   .result-person-filter { min-width: 0; width: 100%; }
+  .result-person-chips { max-width: 100%; }
   .periods {
     overflow: auto;
     max-width: 100%;

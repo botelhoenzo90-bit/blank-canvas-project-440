@@ -63,3 +63,4 @@
 - [x] Adicionar visão geral e individual aos gráficos e rankings
 - [x] Incluir resultados de Masters no ranking de performance
 - [x] Permitir buscar uma pessoa pelo nome nos gráficos e rankings
+- [x] Permitir comparar várias pessoas nos gráficos e rankings sem duplicar vendas
