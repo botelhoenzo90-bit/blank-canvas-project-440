@@ -274,7 +274,7 @@ function DabliuApp() {
   const [accessPending, setAccessPending] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
   const [period, setPeriod] = useState("Hoje");
-  const [resultPersonId, setResultPersonId] = useState("");
+  const [resultPersonIds, setResultPersonIds] = useState<string[]>([]);
   const [resultPersonSearch, setResultPersonSearch] = useState("");
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -369,15 +369,22 @@ function DabliuApp() {
     start.setDate(start.getDate() - days);
     return sales.filter((sale) => new Date(`${sale.date}T00:00:00`) >= start);
   }, [period, sales]);
-  const selectedResultPerson = people.find((person) => person.user_id === resultPersonId) ?? null;
   const resultPeople = people.filter((person) => person.role !== null);
+  const selectedResultPeople = resultPersonIds.flatMap((id) => {
+    const person = resultPeople.find((item) => item.user_id === id);
+    return person ? [person] : [];
+  });
   const resultPersonLabel = (person: Person) =>
     `${person.full_name} · ${person.role === "director" ? "Diretor" : person.role === "master" ? "Master" : person.role === "representative" ? "Representante" : "Supervisor"}`;
-  const resultSales = selectedResultPerson
-    ? periodSales.filter((sale) => saleBelongsToPerson(sale, selectedResultPerson, people))
+  const addResultPerson = (person: Person) => {
+    setResultPersonIds((current) => current.includes(person.user_id) ? current : [...current, person.user_id]);
+    setResultPersonSearch("");
+  };
+  const resultSales = selectedResultPeople.length > 0
+    ? periodSales.filter((sale) => selectedResultPeople.some((person) => saleBelongsToPerson(sale, person, people)))
     : periodSales;
-  const allResultSales = selectedResultPerson
-    ? sales.filter((sale) => saleBelongsToPerson(sale, selectedResultPerson, people))
+  const allResultSales = selectedResultPeople.length > 0
+    ? sales.filter((sale) => selectedResultPeople.some((person) => saleBelongsToPerson(sale, person, people)))
     : sales;
   const todaySales = allResultSales.filter((s) => s.date === today && s.status === "Confirmada");
   const todayTotal = todaySales.reduce((sum, s) => sum + s.value, 0);
@@ -709,13 +716,13 @@ function DabliuApp() {
                 ))}
               </div>
               {(view === "dashboard" || view === "ranking") && (
-                <label className="result-person-filter">
-                  <span>Buscar pessoa</span>
+                <div className="result-person-filter">
+                  <span>Comparar pessoas</span>
                   <input
                     type="search"
                     list="result-people"
                     value={resultPersonSearch}
-                    placeholder="Visão geral ou digite um nome"
+                    placeholder="Digite um nome para adicionar"
                     maxLength={120}
                     autoComplete="off"
                     onChange={(event) => {
@@ -730,15 +737,49 @@ function DabliuApp() {
                         person.full_name.toLocaleLowerCase("pt-BR").includes(normalized),
                       );
                       const partialMatch = partial.length === 1 ? partial.at(0) : undefined;
-                      setResultPersonId(exact?.user_id ?? (normalized ? partialMatch?.user_id ?? "" : ""));
+                      if (exact) addResultPerson(exact);
+                      else if (normalized && partialMatch && value === partialMatch.full_name) addResultPerson(partialMatch);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      const normalized = resultPersonSearch.trim().toLocaleLowerCase("pt-BR");
+                      const matches = resultPeople.filter((person) =>
+                        person.full_name.toLocaleLowerCase("pt-BR").includes(normalized),
+                      );
+                      const match = matches.length === 1 ? matches.at(0) : undefined;
+                      if (match) addResultPerson(match);
                     }}
                   />
                   <datalist id="result-people">
-                    {resultPeople.map((person) => (
+                    {resultPeople.filter((person) => !resultPersonIds.includes(person.user_id)).map((person) => (
                       <option key={person.user_id} value={resultPersonLabel(person)} />
                     ))}
                   </datalist>
-                </label>
+                  {selectedResultPeople.length > 0 && (
+                    <div className="result-person-chips" aria-label="Pessoas selecionadas para comparação">
+                      {selectedResultPeople.map((person) => (
+                        <span className="result-person-chip" key={person.user_id}>
+                          {person.full_name}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Remover ${person.full_name} da comparação`}
+                            onClick={() => setResultPersonIds((current) => current.filter((id) => id !== person.user_id))}
+                          >
+                            <X />
+                          </Button>
+                        </span>
+                      ))}
+                      {selectedResultPeople.length > 1 && (
+                        <Button type="button" variant="ghost" size="sm" className="result-clear" onClick={() => setResultPersonIds([])}>
+                          Limpar
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             <div className="toolbar-right">
