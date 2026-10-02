@@ -747,6 +747,10 @@ button {
   align-items: center;
   margin-bottom: 22px;
 }
+.results-filters { display: flex; align-items: end; gap: 10px; min-width: 0; }
+.result-person-filter { display: grid; gap: 4px; min-width: min(310px, 42vw); }
+.result-person-filter span { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.result-person-filter select { width: 100%; height: 37px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); padding: 0 30px 0 11px; font-size: 11px; font-weight: 700; }
 .periods {
   display: flex;
   gap: 3px;
@@ -2320,6 +2324,8 @@ td {
     gap: 10px;
     align-items: stretch;
   }
+  .results-filters { align-items: stretch; flex-direction: column; flex: 1; }
+  .result-person-filter { min-width: 0; width: 100%; }
   .periods {
     overflow: auto;
     max-width: 100%;

@@ -190,6 +190,38 @@ const representativeForSale = (sale: Sale, people: Person[]) => {
   ) ?? null;
 };
 
+const personForSaleRole = (sale: Sale, people: Person[], wantedRole: Person["role"]) => {
+  let person = sale.ownerId
+    ? people.find((item) => item.user_id === sale.ownerId) ?? null
+    : null;
+  const visited = new Set<string>();
+  while (person && !visited.has(person.user_id)) {
+    visited.add(person.user_id);
+    if (person.role === wantedRole) return person;
+    person = person.manager_id
+      ? people.find((item) => item.user_id === person?.manager_id) ?? null
+      : null;
+  }
+  const recordedName = wantedRole === "master"
+    ? sale.master
+    : wantedRole === "representative"
+      ? sale.representative
+      : wantedRole === "supervisor"
+        ? sale.supervisor
+        : sale.seller;
+  return people.find((item) => item.role === wantedRole && item.full_name === recordedName) ?? null;
+};
+
+const saleBelongsToPerson = (sale: Sale, person: Person, people: Person[]) => {
+  if (sale.ownerId === person.user_id) return true;
+  const hierarchyPerson = personForSaleRole(sale, people, person.role);
+  if (hierarchyPerson?.user_id === person.user_id) return true;
+  if (person.role === "master") return sale.master === person.full_name;
+  if (person.role === "representative") return sale.representative === person.full_name;
+  if (person.role === "supervisor") return sale.supervisor === person.full_name;
+  return false;
+};
+
 function CompanyLogoMark({ sale, people }: { sale: Sale; people: Person[] }) {
   const [imageFailed, setImageFailed] = useState(false);
   const representative = representativeForSale(sale, people);
@@ -242,6 +274,7 @@ function DabliuApp() {
   const [accessPending, setAccessPending] = useState(false);
   const [sales, setSales] = useState<Sale[]>([]);
   const [period, setPeriod] = useState("Hoje");
+  const [resultPersonId, setResultPersonId] = useState("");
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
@@ -335,9 +368,16 @@ function DabliuApp() {
     start.setDate(start.getDate() - days);
     return sales.filter((sale) => new Date(`${sale.date}T00:00:00`) >= start);
   }, [period, sales]);
-  const todaySales = sales.filter((s) => s.date === today && s.status === "Confirmada");
+  const selectedResultPerson = people.find((person) => person.user_id === resultPersonId) ?? null;
+  const resultSales = selectedResultPerson
+    ? periodSales.filter((sale) => saleBelongsToPerson(sale, selectedResultPerson, people))
+    : periodSales;
+  const allResultSales = selectedResultPerson
+    ? sales.filter((sale) => saleBelongsToPerson(sale, selectedResultPerson, people))
+    : sales;
+  const todaySales = allResultSales.filter((s) => s.date === today && s.status === "Confirmada");
   const todayTotal = todaySales.reduce((sum, s) => sum + s.value, 0);
-  const confirmedPeriodSales = periodSales.filter((sale) => sale.status === "Confirmada");
+  const confirmedPeriodSales = resultSales.filter((sale) => sale.status === "Confirmada");
   const periodTotal = confirmedPeriodSales.reduce((sum, s) => sum + s.value, 0);
   const avgTicket = confirmedPeriodSales.length ? periodTotal / confirmedPeriodSales.length : 0;
 
@@ -652,16 +692,31 @@ function DabliuApp() {
 
         <div className="content">
           <div className="top-toolbar">
-            <div className="periods">
-              {["Hoje", "7 dias", "30 dias", "Tudo"].map((p) => (
-                <button
-                  className={period === p ? "active" : ""}
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                >
-                  {p}
-                </button>
-              ))}
+            <div className="results-filters">
+              <div className="periods">
+                {["Hoje", "7 dias", "30 dias", "Tudo"].map((p) => (
+                  <button
+                    className={period === p ? "active" : ""}
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              {(view === "dashboard" || view === "ranking") && (
+                <label className="result-person-filter">
+                  <span>Visualização</span>
+                  <select value={resultPersonId} onChange={(event) => setResultPersonId(event.target.value)}>
+                    <option value="">Visão geral</option>
+                    {people.filter((person) => person.role !== null).map((person) => (
+                      <option key={person.user_id} value={person.user_id}>
+                        {person.full_name} · {person.role === "director" ? "Diretor" : person.role === "master" ? "Master" : person.role === "representative" ? "Representante" : "Supervisor"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
             <div className="toolbar-right">
               <button className="outline-btn" onClick={() => setTvMode(true)}>
@@ -677,7 +732,7 @@ function DabliuApp() {
 
           {view === "dashboard" && (
             <Dashboard
-              sales={periodSales}
+              sales={resultSales}
               todayTotal={todayTotal}
               periodTotal={periodTotal}
               avgTicket={avgTicket}
@@ -693,7 +748,7 @@ function DabliuApp() {
               onCancel={(id) => void cancelRegisteredSale(id)}
             />
           )}
-          {view === "ranking" && <RankingView sales={periodSales} />}
+          {view === "ranking" && <RankingView sales={resultSales} people={people} />}
           {view === "goals" && <GoalsView goals={goals} people={people} sales={sales} role={roleKey(role)} currentUserId={currentUserId} onSave={registerGoal} onEdit={editGoal} onDelete={removeGoal} />}
           {view === "team" && <PeoplePanel role={roleKey(role)} />}
           {view === "reports" && <ReportsView sales={sales} />}
@@ -1124,16 +1179,16 @@ function DataTable({ sales, onCancel }: { sales: Sale[]; onCancel?: (id: string)
   );
 }
 
-function RankingView({ sales }: { sales: Sale[] }) {
+function RankingView({ sales, people }: { sales: Sale[]; people: Person[] }) {
   const [type, setType] = useState("Responsáveis");
   const data =
     type === "Responsáveis"
       ? sellerRanking(sales)
       : type === "Supervisores"
-        ? hierarchyRanking(sales, "supervisor")
+        ? hierarchyRanking(sales, "supervisor", people)
         : type === "Representantes"
-          ? hierarchyRanking(sales, "representative")
-          : hierarchyRanking(sales, "master");
+          ? hierarchyRanking(sales, "representative", people)
+          : hierarchyRanking(sales, "master", people);
   const topValue = data[0]?.value ?? 1;
   return (
     <section className="panel full-panel">
@@ -1175,10 +1230,16 @@ function RankingView({ sales }: { sales: Sale[] }) {
     </section>
   );
 }
-function hierarchyRanking(sales: Sale[], key: keyof Sale) {
+function hierarchyRanking(
+  sales: Sale[],
+  key: "supervisor" | "representative" | "master",
+  people: Person[],
+) {
   const map = new Map<string, { name: string; value: number }>();
   sales.filter((sale) => sale.status === "Confirmada").forEach((s) => {
-    const name = String(s[key]);
+    const role = key === "master" ? "master" : key === "representative" ? "representative" : "supervisor";
+    const name = personForSaleRole(s, people, role)?.full_name ?? String(s[key]);
+    if (!name || name === "—") return;
     const old = map.get(name) || { name, value: 0 };
     old.value += s.value;
     map.set(name, old);

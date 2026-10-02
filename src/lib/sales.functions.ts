@@ -106,7 +106,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
         seller: owner.full_name,
         supervisor: sellerRole.role === "supervisor" ? owner.full_name : byRole("supervisor"),
         representative: sellerRole.role === "representative" ? owner.full_name : byRole("representative"),
-        master: byRole("master"),
+        master: sellerRole.role === "master" ? owner.full_name : byRole("master"),
         super_master: "",
         team: owner.team || "—",
         city: data.city,
