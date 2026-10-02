@@ -729,7 +729,8 @@ function DabliuApp() {
                       const partial = resultPeople.filter((person) =>
                         person.full_name.toLocaleLowerCase("pt-BR").includes(normalized),
                       );
-                      setResultPersonId(exact?.user_id ?? (normalized && partial.length === 1 ? partial[0].user_id : ""));
+                      const partialMatch = partial.length === 1 ? partial.at(0) : undefined;
+                      setResultPersonId(exact?.user_id ?? (normalized ? partialMatch?.user_id ?? "" : ""));
                     }}
                   />
                   <datalist id="result-people">
