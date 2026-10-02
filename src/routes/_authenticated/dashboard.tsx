@@ -275,6 +275,7 @@ function DabliuApp() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [period, setPeriod] = useState("Hoje");
   const [resultPersonId, setResultPersonId] = useState("");
+  const [resultPersonSearch, setResultPersonSearch] = useState("");
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
@@ -369,6 +370,9 @@ function DabliuApp() {
     return sales.filter((sale) => new Date(`${sale.date}T00:00:00`) >= start);
   }, [period, sales]);
   const selectedResultPerson = people.find((person) => person.user_id === resultPersonId) ?? null;
+  const resultPeople = people.filter((person) => person.role !== null);
+  const resultPersonLabel = (person: Person) =>
+    `${person.full_name} · ${person.role === "director" ? "Diretor" : person.role === "master" ? "Master" : person.role === "representative" ? "Representante" : "Supervisor"}`;
   const resultSales = selectedResultPerson
     ? periodSales.filter((sale) => saleBelongsToPerson(sale, selectedResultPerson, people))
     : periodSales;
@@ -706,15 +710,33 @@ function DabliuApp() {
               </div>
               {(view === "dashboard" || view === "ranking") && (
                 <label className="result-person-filter">
-                  <span>Visualização</span>
-                  <select value={resultPersonId} onChange={(event) => setResultPersonId(event.target.value)}>
-                    <option value="">Visão geral</option>
-                    {people.filter((person) => person.role !== null).map((person) => (
-                      <option key={person.user_id} value={person.user_id}>
-                        {person.full_name} · {person.role === "director" ? "Diretor" : person.role === "master" ? "Master" : person.role === "representative" ? "Representante" : "Supervisor"}
-                      </option>
+                  <span>Buscar pessoa</span>
+                  <input
+                    type="search"
+                    list="result-people"
+                    value={resultPersonSearch}
+                    placeholder="Visão geral ou digite um nome"
+                    maxLength={120}
+                    autoComplete="off"
+                    onChange={(event) => {
+                      const value = event.target.value.slice(0, 120);
+                      setResultPersonSearch(value);
+                      const normalized = value.trim().toLocaleLowerCase("pt-BR");
+                      const exact = resultPeople.find((person) =>
+                        resultPersonLabel(person).toLocaleLowerCase("pt-BR") === normalized ||
+                        person.full_name.toLocaleLowerCase("pt-BR") === normalized,
+                      );
+                      const partial = resultPeople.filter((person) =>
+                        person.full_name.toLocaleLowerCase("pt-BR").includes(normalized),
+                      );
+                      setResultPersonId(exact?.user_id ?? (normalized && partial.length === 1 ? partial[0].user_id : ""));
+                    }}
+                  />
+                  <datalist id="result-people">
+                    {resultPeople.map((person) => (
+                      <option key={person.user_id} value={resultPersonLabel(person)} />
                     ))}
-                  </select>
+                  </datalist>
                 </label>
               )}
             </div>

@@ -62,3 +62,4 @@
 - [x] Revisar permissões, progresso e vínculos relacionados às metas
 - [x] Adicionar visão geral e individual aos gráficos e rankings
 - [x] Incluir resultados de Masters no ranking de performance
+- [x] Permitir buscar uma pessoa pelo nome nos gráficos e rankings
