@@ -60,3 +60,5 @@
 - [x] Validar superiores por nível hierárquico e mostrar logos na coluna Empresa da Central TV
 - [x] Corrigir criação de metas por hierarquia e diferenciar os cargos por cor
 - [x] Revisar permissões, progresso e vínculos relacionados às metas
+- [x] Adicionar visão geral e individual aos gráficos e rankings
+- [x] Incluir resultados de Masters no ranking de performance

@@ -17,3 +17,4 @@
 - Mutate goals through authenticated server functions and user-scoped RLS; only the creator or a Director may edit or delete them.
 - Validate goal targets and hierarchy in authenticated server functions before relying on RLS, so users receive clear errors and cannot bypass role rules.
 - Validate each profile manager against the role chain on the server, because incorrect links break hierarchy permissions and company branding.
+- Snapshot the sale owner's own role into its matching hierarchy field, then resolve reporting through owner IDs and the profile chain so individual and role rankings remain accurate.
