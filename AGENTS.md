@@ -18,3 +18,4 @@
 - Validate goal targets and hierarchy in authenticated server functions before relying on RLS, so users receive clear errors and cannot bypass role rules.
 - Validate each profile manager against the role chain on the server, because incorrect links break hierarchy permissions and company branding.
 - Snapshot the sale owner's own role into its matching hierarchy field, then resolve reporting through owner IDs and the profile chain so individual and role rankings remain accurate.
+- Delete accounts only through an authenticated server function using shared, tested hierarchy permissions and user-scoped target reads before privileged cleanup; block self-deletion, Directors and managers with subordinates to preserve access and hierarchy integrity.

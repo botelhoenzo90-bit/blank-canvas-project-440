@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { assertPersonDeletionAllowed, managedRoles } from "@/lib/people-permissions";
 
 const roleSchema = z.enum([
   "director",
@@ -53,12 +54,7 @@ const inviteSchema = z.object({
 
 type AppRole = z.infer<typeof roleSchema>;
 type LogoPayload = { companyLogoDataUrl: string | null };
-const canCreate: Record<AppRole, AppRole[]> = {
-  director: ["master", "representative", "supervisor"],
-  master: ["representative", "supervisor"],
-  representative: ["supervisor"],
-  supervisor: [],
-};
+const canCreate = managedRoles;
 const allowedManagerRoles: Record<AppRole, AppRole[]> = {
   director: [],
   master: ["director"],
@@ -309,5 +305,49 @@ export const updatePerson = createServerFn({ method: "POST" })
       action: "USER_UPDATED",
       details: { role: data.role, active: data.active },
     });
+    return { ok: true };
+  });
+
+export const deletePerson = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ userId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const actorRole = await getActorRole(context);
+    const [{ data: target, error: targetError }, { data: targetRoleRow, error: roleError }] = await Promise.all([
+      context.supabase.from("profiles").select("user_id, full_name, company_logo_path").eq("user_id", data.userId).maybeSingle(),
+      context.supabase.from("user_roles").select("role").eq("user_id", data.userId).maybeSingle(),
+    ]);
+    if (targetError || roleError) throw new Error("Não foi possível conferir este acesso.");
+    const targetRole = roleSchema.safeParse(targetRoleRow?.role);
+    const permission = {
+      actorId: context.userId, actorRole, targetId: data.userId,
+      targetRole: targetRole.success ? targetRole.data : null,
+      visible: Boolean(target), hasSubordinates: false,
+    };
+    assertPersonDeletionAllowed(permission);
+    if (!target) throw new Error("Este acesso não foi encontrado.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { count, error: childrenError } = await supabaseAdmin.from("profiles")
+      .select("user_id", { count: "exact", head: true }).eq("manager_id", target.user_id);
+    if (childrenError) throw new Error("Não foi possível conferir os vínculos desta pessoa.");
+    assertPersonDeletionAllowed({ ...permission, hasSubordinates: (count ?? 0) > 0 });
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(target.user_id);
+    if (authError) throw new Error("Não foi possível apagar este acesso.");
+    const cleanup = await Promise.all([
+      supabaseAdmin.from("profiles").delete().eq("user_id", target.user_id),
+      supabaseAdmin.from("user_roles").delete().eq("user_id", target.user_id),
+      supabaseAdmin.from("push_devices").delete().eq("user_id", target.user_id),
+    ]);
+    if (cleanup.some((result) => result.error))
+      throw new Error("O login foi removido, mas a exclusão do perfil precisa ser concluída. Tente novamente.");
+    if (target.company_logo_path) {
+      const { error } = await supabaseAdmin.storage.from("company-logos").remove([target.company_logo_path]);
+      if (error) console.error("Could not remove deleted person's company logo", error.message);
+    }
+    const { error: auditError } = await supabaseAdmin.from("access_audit").insert({
+      actor_id: context.userId, target_user_id: target.user_id,
+      action: "USER_DELETED", details: { role: permission.targetRole, full_name: target.full_name },
+    });
+    if (auditError) console.error("Could not audit person deletion", auditError.message);
     return { ok: true };
   });
