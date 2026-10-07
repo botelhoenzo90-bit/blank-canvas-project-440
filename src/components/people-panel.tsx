@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, ImagePlus, MoreHorizontal, Pencil, Power, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
-import { createPerson, listPeople, updatePerson } from "@/lib/people.functions";
+import { createPerson, deletePerson, listPeople, updatePerson } from "@/lib/people.functions";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -58,6 +58,8 @@ export function PeoplePanel({ role }: { role: AppRole }) {
   const load = useServerFn(listPeople);
   const create = useServerFn(createPerson);
   const update = useServerFn(updatePerson);
+  const remove = useServerFn(deletePerson);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Person | null>(null);
@@ -154,6 +156,19 @@ export function PeoplePanel({ role }: { role: AppRole }) {
       toast.error(error instanceof Error ? error.message : "Não foi possível alterar o acesso.");
     }
   };
+  const erase = async (person: Person) => {
+    if (!window.confirm(`Apagar permanentemente ${person.full_name}? O login, perfil, logo e metas dessa pessoa serão removidos. As vendas já registradas serão preservadas. Esta ação não pode ser desfeita.`)) return;
+    setDeletingId(person.user_id);
+    try {
+      await remove({ data: { userId: person.user_id } });
+      toast.success("Pessoa e acesso apagados");
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível apagar esta pessoa.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
   const choices = allowedRoles[role];
   const managerChoices = people.filter(
     (person) =>
@@ -217,12 +232,14 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                   {p.role && choices.includes(p.role) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="people-menu-trigger" aria-label={`Opções de ${p.full_name}`}><MoreHorizontal /></Button>
+                        <Button variant="ghost" size="icon" className="people-menu-trigger" disabled={deletingId !== null} aria-label={`Opções de ${p.full_name}`}><MoreHorizontal /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="people-menu-content">
                         <DropdownMenuItem onSelect={() => openEdit(p)}><Pencil /> Editar perfil</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className={p.active ? "people-menu-danger" : ""} onSelect={() => void toggle(p)}><Power /> {p.active ? "Desativar acesso" : "Ativar acesso"}</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="people-menu-danger" onSelect={() => void erase(p)}><Trash2 /> Apagar pessoa</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

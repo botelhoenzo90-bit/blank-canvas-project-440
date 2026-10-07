@@ -587,7 +587,7 @@ function DabliuApp() {
             </div>
             <h1>
               {view === "dashboard"
-                ? `Olá, ${profileName.split(" ")[0] || "Usuário"}`
+                ? `Olá, ${profileName.split(" ")[0] || "Usuário"}${role ? ` · ${role}` : ""}`
                 : titleFor(view)}
             </h1>
           </div>
