@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, it as test } from "node:test";
+import { doesNotThrow, throws } from "node:assert/strict";
 import { assertPersonDeletionAllowed, type ManagedRole } from "./people-permissions";
 
 const input = {
@@ -10,30 +11,30 @@ const input = {
 describe("Apagar pessoa", () => {
   test("Diretor pode apagar os três cargos inferiores", () => {
     for (const targetRole of ["master", "representative", "supervisor"] as const)
-      expect(() => assertPersonDeletionAllowed({ ...input, targetRole })).not.toThrow();
+      doesNotThrow(() => assertPersonDeletionAllowed({ ...input, targetRole }));
   });
   test("Master só pode apagar Representante e Supervisor", () => {
     for (const targetRole of ["representative", "supervisor"] as const)
-      expect(() => assertPersonDeletionAllowed({ ...input, actorRole: "master", targetRole })).not.toThrow();
-    expect(() => assertPersonDeletionAllowed({ ...input, actorRole: "master", targetRole: "master" })).toThrow();
+      doesNotThrow(() => assertPersonDeletionAllowed({ ...input, actorRole: "master", targetRole }));
+    throws(() => assertPersonDeletionAllowed({ ...input, actorRole: "master", targetRole: "master" }));
   });
   test("Representante só pode apagar Supervisor", () => {
-    expect(() => assertPersonDeletionAllowed({ ...input, actorRole: "representative" })).not.toThrow();
-    expect(() => assertPersonDeletionAllowed({ ...input, actorRole: "representative", targetRole: "representative" })).toThrow();
+    doesNotThrow(() => assertPersonDeletionAllowed({ ...input, actorRole: "representative" }));
+    throws(() => assertPersonDeletionAllowed({ ...input, actorRole: "representative", targetRole: "representative" }));
   });
   test("Supervisor não pode apagar pessoas", () => {
-    expect(() => assertPersonDeletionAllowed({ ...input, actorRole: "supervisor" })).toThrow();
+    throws(() => assertPersonDeletionAllowed({ ...input, actorRole: "supervisor" }));
   });
   test("não permite apagar Presidente/Diretor", () => {
-    expect(() => assertPersonDeletionAllowed({ ...input, targetRole: "director" })).toThrow();
+    throws(() => assertPersonDeletionAllowed({ ...input, targetRole: "director" }));
   });
   test("não permite apagar o próprio acesso", () => {
-    expect(() => assertPersonDeletionAllowed({ ...input, targetId: input.actorId })).toThrow();
+    throws(() => assertPersonDeletionAllowed({ ...input, targetId: input.actorId }));
   });
   test("não permite apagar pessoa fora da estrutura visível", () => {
-    expect(() => assertPersonDeletionAllowed({ ...input, visible: false })).toThrow();
+    throws(() => assertPersonDeletionAllowed({ ...input, visible: false }));
   });
   test("exige transferir subordinados antes da exclusão", () => {
-    expect(() => assertPersonDeletionAllowed({ ...input, hasSubordinates: true })).toThrow();
+    throws(() => assertPersonDeletionAllowed({ ...input, hasSubordinates: true }));
   });
 });

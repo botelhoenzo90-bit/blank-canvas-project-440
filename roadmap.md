@@ -64,6 +64,6 @@
 - [x] Incluir resultados de Masters no ranking de performance
 - [x] Permitir buscar uma pessoa pelo nome nos gráficos e rankings
 - [x] Permitir comparar várias pessoas nos gráficos e rankings sem duplicar vendas
-- [ ] Adicionar exclusão de pessoas com confirmação e proteção da hierarquia
-- [ ] Mostrar o cargo junto à saudação na Visão Geral
+- [x] Adicionar exclusão de pessoas com confirmação e proteção da hierarquia
+- [x] Mostrar o cargo junto à saudação na Visão Geral
 - [x] Apagar todas as vendas de teste e conferir histórico zerado
