@@ -1,0 +1,3 @@
+CREATE OR REPLACE FUNCTION public.tv_branding_profiles() RETURNS TABLE(user_id uuid,full_name text,manager_id uuid,team text,company_name text,management_name text,active boolean,role public.app_role,company_logo_path text) LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$ SELECT p.user_id,p.full_name,p.manager_id,p.team,p.company_name,p.management_name,p.active,r.role,p.company_logo_path FROM public.profiles p JOIN public.user_roles r ON r.user_id=p.user_id; $$;
+REVOKE ALL ON FUNCTION public.tv_branding_profiles() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.tv_branding_profiles() TO service_role;
