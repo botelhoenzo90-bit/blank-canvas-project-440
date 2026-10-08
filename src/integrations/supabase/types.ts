@@ -300,6 +300,24 @@ export type Database = {
         }
         Relationships: []
       }
+      tv_sales_feed: {
+        Row: {
+          sale_data: Json
+          sale_id: string
+          updated_at: string
+        }
+        Insert: {
+          sale_data: Json
+          sale_id: string
+          updated_at?: string
+        }
+        Update: {
+          sale_data?: Json
+          sale_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           assigned_by: string | null
@@ -332,7 +350,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      tv_branding_profiles: {
+        Args: never
+        Returns: {
+          active: boolean
+          company_logo_path: string
+          company_name: string
+          full_name: string
+          management_name: string
+          manager_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          team: string
+          user_id: string
+        }[]
+      }
+      tv_sale_projection: {
+        Args: { s: Database["public"]["Tables"]["sales"]["Row"] }
+        Returns: Json
+      }
     }
     Enums: {
       app_role:

@@ -1,0 +1,15 @@
+CREATE TABLE public.tv_sales_feed (sale_id uuid PRIMARY KEY, sale_data jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
+GRANT SELECT ON public.tv_sales_feed TO authenticated;
+GRANT ALL ON public.tv_sales_feed TO service_role;
+ALTER TABLE public.tv_sales_feed ENABLE ROW LEVEL SECURITY;
+CREATE POLICY active_users_read_tv ON public.tv_sales_feed FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = auth.uid() AND p.active) AND private.current_role(auth.uid()) IN ('director','master','representative','supervisor'));
+CREATE OR REPLACE FUNCTION public.tv_sale_projection(s public.sales) RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = public AS $$ SELECT jsonb_build_object('id',s.id,'owner_id',s.owner_id,'seller',s.seller,'supervisor',s.supervisor,'representative',s.representative,'master',s.master,'team',s.team,'city',s.city,'value',s.value,'sale_date',s.sale_date,'sale_time',s.sale_time,'status',s.status,'sale_type',s.sale_type,'seller_company',s.seller_company); $$;
+REVOKE ALL ON FUNCTION public.tv_sale_projection(public.sales) FROM PUBLIC, anon, authenticated;
+CREATE OR REPLACE FUNCTION public.sync_tv_sales_feed() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BEGIN IF TG_OP = 'DELETE' THEN DELETE FROM public.tv_sales_feed WHERE sale_id = OLD.id; RETURN OLD; END IF; INSERT INTO public.tv_sales_feed(sale_id,sale_data,updated_at) VALUES (NEW.id,public.tv_sale_projection(NEW),now()) ON CONFLICT (sale_id) DO UPDATE SET sale_data=EXCLUDED.sale_data,updated_at=EXCLUDED.updated_at; RETURN NEW; END; $$;
+REVOKE ALL ON FUNCTION public.sync_tv_sales_feed() FROM PUBLIC, anon, authenticated;
+CREATE TRIGGER sync_sales_to_tv AFTER INSERT OR UPDATE OR DELETE ON public.sales FOR EACH ROW EXECUTE FUNCTION public.sync_tv_sales_feed();
+INSERT INTO public.tv_sales_feed(sale_id,sale_data) SELECT id,public.tv_sale_projection(sales) FROM public.sales;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.tv_sales_feed;
+CREATE OR REPLACE FUNCTION public.tv_branding_profiles() RETURNS TABLE(user_id uuid,full_name text,manager_id uuid,team text,company_name text,management_name text,active boolean,role public.app_role,company_logo_path text) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT p.user_id,p.full_name,p.manager_id,p.team,p.company_name,p.management_name,p.active,r.role,p.company_logo_path FROM public.profiles p JOIN public.user_roles r ON r.user_id=p.user_id WHERE EXISTS (SELECT 1 FROM public.profiles actor WHERE actor.user_id=auth.uid() AND actor.active) AND private.current_role(auth.uid()) IN ('director','master','representative','supervisor'); $$;
+REVOKE ALL ON FUNCTION public.tv_branding_profiles() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.tv_branding_profiles() TO authenticated;
