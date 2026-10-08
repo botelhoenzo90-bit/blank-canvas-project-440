@@ -19,3 +19,5 @@
 - Validate each profile manager against the role chain on the server, because incorrect links break hierarchy permissions and company branding.
 - Snapshot the sale owner's own role into its matching hierarchy field, then resolve reporting through owner IDs and the profile chain so individual and role rankings remain accurate.
 - Delete accounts only through an authenticated server function using shared, tested hierarchy permissions and user-scoped target reads before privileged cleanup; block self-deletion, Directors and managers with subordinates to preserve access and hierarchy integrity.
+- Use an authenticated, minimal sales projection synchronized by a database trigger for the global TV feed and Realtime; keep normal sales RLS and push notification behavior unchanged so TV visibility does not broaden ordinary access.
+- Provide Director account inspection through a role-verified server function and read-only scoped data, never by replacing sessions or impersonating another user; this preserves actor identity and prevents accidental mutations.
