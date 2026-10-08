@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -57,6 +57,8 @@ import { PeoplePanel, type Person } from "@/components/people-panel";
 import { listPeople } from "@/lib/people.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { getManagementView, getTvBranding } from "@/lib/management-view.functions";
+import { ManagementPeople } from "@/components/management-people";
 import logo from "@/assets/dabliu-logo.png.asset.json";
 import saleBell from "@/assets/dabliu-sale-bell.mp3.asset.json";
 
@@ -272,7 +274,7 @@ function DabliuApp() {
   const [currentUserId, setCurrentUserId] = useState("");
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessPending, setAccessPending] = useState(false);
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [ownSales, setSales] = useState<Sale[]>([]);
   const [period, setPeriod] = useState("Hoje");
   const [resultPersonIds, setResultPersonIds] = useState<string[]>([]);
   const [resultPersonSearch, setResultPersonSearch] = useState("");
@@ -281,8 +283,16 @@ function DabliuApp() {
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const [ownPeople, setPeople] = useState<Person[]>([]);
+  const [ownGoals, setGoals] = useState<Goal[]>([]);
+  const [viewingId, setViewingId] = useState("");
+  const [managementView, setManagementView] = useState<Awaited<ReturnType<typeof getManagementView>> | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const loadManagement = useServerFn(getManagementView);
+  const readOnly = viewingId !== "";
+  const people = readOnly ? (managementView?.people ?? []) as Person[] : ownPeople;
+  const goals = readOnly ? managementView?.goals ?? [] : ownGoals;
+  const sales = readOnly ? (managementView?.sales ?? []).map(saleFromRow) : ownSales;
   const [tvMode, setTvMode] = useState(false);
   const [tvAnnouncement, setTvAnnouncement] = useState<Sale | null>(null);
   const [savingSale, setSavingSale] = useState(false);
@@ -322,6 +332,33 @@ function DabliuApp() {
       void loadGoals().then((items) => setGoals(items as Goal[])).catch(() => setGoals([]));
     }
   }, [role]);
+
+  useEffect(() => {
+    if (!viewingId || role !== "Presidente/Diretor") return;
+    let active = true;
+    let pending = false;
+    setManagementView(null);
+    setViewLoading(true);
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const result = await loadManagement({ data: { userId: viewingId } });
+        if (active) setManagementView(result);
+      } catch (error) {
+        if (active) {
+          toast.error(error instanceof Error ? error.message : "Não foi possível abrir esta gestão.");
+          setViewingId("");
+        }
+      } finally {
+        pending = false;
+        if (active) setViewLoading(false);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 10000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [viewingId, role]);
 
   useEffect(() => {
     let active = true;
@@ -482,15 +519,12 @@ function DabliuApp() {
     );
   if (accessPending) return <PendingAccess name={profileName} onExit={signOut} />;
   if (!role) return <PendingAccess name={profileName} onExit={signOut} />;
-  const canRegisterSale = true;
+  const canRegisterSale = !readOnly;
   const saleOwners = people.filter((person) => person.active && person.role !== null);
 
   if (tvMode || view === "tv") {
     return (
-      <TvPanel
-        sales={sales}
-         people={people}
-        announcement={tvAnnouncement}
+      <LiveTv
         onExit={() => {
           setTvMode(false);
           setView("dashboard");
@@ -581,17 +615,29 @@ function DabliuApp() {
           <button className="mobile-menu" onClick={() => setSidebarOpen((v) => !v)}>
             <Menu size={22} />
           </button>
-          <div>
+          <div className="header-heading">
             <div className="breadcrumb">
               Dábliu <span>/</span> {view === "dashboard" ? "Visão geral" : view}
             </div>
             <h1>
               {view === "dashboard"
-                ? `Olá, ${profileName.split(" ")[0] || "Usuário"}${role ? ` · ${role}` : ""}`
+                ? readOnly ? managementView?.target.full_name ?? "Carregando gestão..." : `Olá, ${profileName.split(" ")[0] || "Usuário"}${role ? ` · ${role}` : ""}`
                 : titleFor(view)}
             </h1>
           </div>
           <div className="header-actions">
+            {role === "Presidente/Diretor" && <label className="management-view-select">
+              <span>Visualizar conta</span>
+              <select aria-label="Visualizar conta" value={viewingId} onChange={(event) => {
+                setViewingId(event.target.value);
+                setResultPersonIds([]);
+                setResultPersonSearch("");
+                setShowSaleModal(false);
+              }}>
+                <option value="">Minha conta</option>
+                {ownPeople.filter((p) => p.user_id !== currentUserId && p.role).map((p) => <option key={p.user_id} value={p.user_id}>{p.full_name} · {p.role === "master" ? "Master" : p.role === "representative" ? "Representante" : p.role === "supervisor" ? "Supervisor" : "Presidente/Diretor"}</option>)}
+              </select>
+            </label>}
             <div className="role-select">
               <ShieldCheck size={15} />
               <strong>{role}</strong>
@@ -794,6 +840,7 @@ function DabliuApp() {
             </div>
           </div>
 
+          {readOnly && <div className="management-view-banner"><span>{viewLoading ? "Carregando gestão..." : `Visualizando ${managementView?.target.full_name ?? "conta"} · Somente leitura`}</span><Button variant="outline" size="sm" onClick={() => setViewingId("")}><X size={14} /> Voltar à minha conta</Button></div>}
           {view === "dashboard" && (
             <Dashboard
               sales={resultSales}
@@ -808,13 +855,13 @@ function DabliuApp() {
               sales={periodSales}
               search={search}
               setSearch={setSearch}
-              onAdd={() => setShowSaleModal(true)}
-              onCancel={(id) => void cancelRegisteredSale(id)}
+              onAdd={readOnly ? undefined : () => setShowSaleModal(true)}
+              onCancel={readOnly ? undefined : (id) => void cancelRegisteredSale(id)}
             />
           )}
           {view === "ranking" && <RankingView sales={resultSales} people={people} />}
-          {view === "goals" && <GoalsView goals={goals} people={people} sales={sales} role={roleKey(role)} currentUserId={currentUserId} onSave={registerGoal} onEdit={editGoal} onDelete={removeGoal} />}
-          {view === "team" && <PeoplePanel role={roleKey(role)} />}
+          {view === "goals" && <GoalsView readOnly={readOnly} goals={goals} people={people} sales={sales} role={roleKey(role)} currentUserId={currentUserId} onSave={registerGoal} onEdit={editGoal} onDelete={removeGoal} />}
+          {view === "team" && (readOnly ? <ManagementPeople people={people} /> : <PeoplePanel role={roleKey(role)} />)}
           {view === "reports" && <ReportsView sales={sales} />}
         </div>
       </main>
@@ -1134,7 +1181,7 @@ function SalesView({
   search: string;
   setSearch: (v: string) => void;
   onAdd?: () => void;
-  onCancel: (id: string) => void;
+  onCancel?: (id: string) => void;
 }) {
   const filtered = sales.filter((s) =>
     [
@@ -1311,12 +1358,13 @@ function hierarchyRanking(
   return [...map.values()].sort((a, b) => b.value - a.value);
 }
 
-function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, onDelete }: {
+function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, onDelete, readOnly = false }: {
   goals: Goal[];
   people: Person[];
   sales: Sale[];
   role: "director" | "master" | "representative" | "supervisor";
   currentUserId: string;
+  readOnly?: boolean;
   onSave: (input: { targetUserId: string; amount: number; periodMonth: string }) => Promise<void>;
   onEdit: (input: { goalId: string; targetUserId: string; amount: number; periodMonth: string }) => Promise<void>;
   onDelete: (goalId: string) => Promise<void>;
@@ -1327,7 +1375,7 @@ function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, 
   const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
   const eligibleRoles = role === "director" ? ["master", "representative", "supervisor"] : role === "master" ? ["representative", "supervisor"] : role === "representative" ? ["supervisor"] : [];
   const eligible = people.filter((person) => person.active && person.role && eligibleRoles.includes(person.role));
-  const canCreateGoal = role !== "supervisor";
+  const canCreateGoal = !readOnly && role !== "supervisor";
   const names = new Map(people.map((person) => [person.user_id, person.full_name]));
   const openCreate = () => {
     setEditingGoal(null);
@@ -1404,7 +1452,7 @@ function GoalsView({ goals, people, sales, role, currentUserId, onSave, onEdit, 
             const target = Number(goal.amount);
             const percentage = target > 0 ? Math.min(100, Math.round((achieved / target) * 100)) : 0;
             const remaining = Math.max(0, target - achieved);
-            const canManage = role === "director" || goal.created_by === currentUserId;
+            const canManage = !readOnly && (role === "director" || goal.created_by === currentUserId);
             return (
               <article className={`goal-card goal-role-${goal.target_role}`} key={goal.id}>
                 <div className="goal-card-head">
@@ -1685,6 +1733,100 @@ function SaleModal({
       </form>
     </div>
   );
+}
+
+function LiveTv({ onExit }: { onExit: () => void }) {
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [announcement, setAnnouncement] = useState<Sale | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const loadBranding = useServerFn(getTvBranding);
+  useEffect(() => {
+    let active = true;
+    let initialized = false;
+    let refreshing = false;
+    let playing = false;
+    let announcementTimer: number | undefined;
+    const rows = new Map<string, Sale>();
+    const queued: Sale[] = [];
+    const pending: Array<{ event: string; sale: Sale | null; id: string }> = [];
+    const playNext = () => {
+      if (!active || playing || queued.length === 0) return;
+      const next = queued.shift();
+      if (!next) return;
+      playing = true;
+      setAnnouncement(next);
+      announcementTimer = window.setTimeout(() => { playing = false; setAnnouncement(null); playNext(); }, 28500);
+    };
+    const accept = (sale: Sale, announce: boolean) => {
+      const previous = rows.get(sale.id);
+      rows.set(sale.id, sale);
+      if (announce && sale.status === "Confirmada" && previous?.status !== "Confirmada") {
+        queued.push(sale);
+        playNext();
+      }
+    };
+    const publish = () => setSales([...rows.values()].sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)));
+    const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const snapshot = [];
+        for (let offset = 0; ; offset += 1000) {
+          const { data, error } = await supabase.from("tv_sales_feed").select("sale_id, sale_data").order("sale_id").range(offset, offset + 999);
+          if (error) throw error;
+          snapshot.push(...(data ?? []));
+          if ((data?.length ?? 0) < 1000) break;
+        }
+        if (!active) return;
+        const present = new Set(snapshot.map((row) => row.sale_id));
+        for (const id of rows.keys()) if (!present.has(id)) rows.delete(id);
+        for (const row of snapshot) accept(tvSaleFromData(row.sale_data), initialized);
+        initialized = true;
+        for (const update of pending.splice(0)) {
+          if (update.event === "DELETE") rows.delete(update.id);
+          else if (update.sale) accept(update.sale, true);
+        }
+        publish();
+        setError("");
+        setLoading(false);
+      } catch {
+        if (active) { setError("Não foi possível atualizar as vendas da TV. Tentando novamente..."); setLoading(false); }
+      } finally { refreshing = false; }
+    };
+    const channel = supabase.channel("dabliu-global-tv")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tv_sales_feed" }, (payload) => {
+        if (!active) return;
+        const row = payload.new as { sale_id?: string; sale_data?: unknown };
+        const old = payload.old as { sale_id?: string };
+        const id = row.sale_id ?? old.sale_id;
+        if (!id) return;
+        const sale = row.sale_data ? tvSaleFromData(row.sale_data) : null;
+        if (!initialized || refreshing) { pending.push({ event: payload.eventType, id, sale }); return; }
+        if (payload.eventType === "DELETE") rows.delete(id);
+        else if (sale) accept(sale, true);
+        publish();
+      }).subscribe((status) => { if (status === "SUBSCRIBED") void refresh(); });
+    void refresh();
+    const refreshBranding = () => void loadBranding().then((items) => { if (active) setPeople(items as Person[]); }).catch(() => { if (active) setError("Não foi possível carregar as logomarcas da TV."); });
+    refreshBranding();
+    const retry = window.setInterval(() => void refresh(), 15000);
+    const brandingTimer = window.setInterval(refreshBranding, 1800000);
+    return () => {
+      active = false;
+      window.clearInterval(retry);
+      window.clearInterval(brandingTimer);
+      if (announcementTimer !== undefined) window.clearTimeout(announcementTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+  return <><TvPanel sales={sales} people={people} announcement={announcement} onExit={onExit} />{(loading || error) && <div className="tv-feed-status" role="status">{loading ? "Carregando vendas de toda a gestão..." : error}</div>}</>;
+}
+
+function tvSaleFromData(data: unknown): Sale {
+  const row = data as Partial<SaleRow>;
+  return saleFromRow({ ...row, super_master: "", group_number: "", administrator: "", credit_value: null, payment_method: "", lead_source: "", notes: "", sale_time: row.sale_time ?? "00:00:00" } as SaleRow);
 }
 
 function TvPanel({
