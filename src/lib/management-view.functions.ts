@@ -3,6 +3,7 @@ import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertDirectorView, structureIds } from "@/lib/view-scope";
+import type { Database } from "@/integrations/supabase/types";
 
 export const getManagementView = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -21,7 +22,7 @@ export const getManagementView = createServerFn({ method: "GET" })
       profiles.push(...(rows ?? []));
       if ((rows?.length ?? 0) < 1000) break;
     }
-    const roles = [];
+    const roles: Array<{ user_id: string; role: Database["public"]["Enums"]["app_role"] }> = [];
     for (let offset = 0; ; offset += 1000) {
       const { data: rows, error } = await context.supabase.from("user_roles").select("user_id, role").order("user_id").range(offset, offset + 999);
       if (error) throw new Error("Não foi possível carregar os cargos.");

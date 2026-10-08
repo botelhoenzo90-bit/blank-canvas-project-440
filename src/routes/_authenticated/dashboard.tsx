@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -1180,8 +1180,8 @@ function SalesView({
   sales: Sale[];
   search: string;
   setSearch: (v: string) => void;
-  onAdd?: () => void;
-  onCancel?: (id: string) => void;
+  onAdd?: (() => void) | undefined;
+  onCancel?: ((id: string) => void) | undefined;
 }) {
   const filtered = sales.filter((s) =>
     [
@@ -1229,7 +1229,7 @@ function SalesView({
   );
 }
 
-function DataTable({ sales, onCancel }: { sales: Sale[]; onCancel?: (id: string) => void }) {
+function DataTable({ sales, onCancel }: { sales: Sale[]; onCancel?: ((id: string) => void) | undefined }) {
   return (
     <div className="table-wrap">
       <table>
