@@ -67,6 +67,6 @@
 - [x] Adicionar exclusão de pessoas com confirmação e proteção da hierarquia
 - [x] Mostrar o cargo junto à saudação na Visão Geral
 - [x] Apagar todas as vendas de teste e conferir histórico zerado
-- [ ] Mostrar todas as vendas e destaques ao vivo na TV para toda a gestão, sem ampliar notificações
-- [ ] Permitir ao Diretor visualizar uma conta e sua estrutura sem trocar o login
-- [ ] Corrigir textos cortados no topo
+- [x] Mostrar todas as vendas e destaques ao vivo na TV para toda a gestão, sem ampliar notificações
+- [x] Permitir ao Diretor visualizar uma conta e sua estrutura sem trocar o login
+- [x] Corrigir textos cortados no topo
