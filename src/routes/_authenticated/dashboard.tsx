@@ -59,6 +59,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { getManagementView, getTvBranding } from "@/lib/management-view.functions";
 import { ManagementPeople } from "@/components/management-people";
+import { switchProfile } from "@/lib/linked-profiles.functions";
 import logo from "@/assets/dabliu-logo.png.asset.json";
 import saleBell from "@/assets/dabliu-sale-bell.mp3.asset.json";
 
@@ -269,6 +270,9 @@ function DabliuApp() {
   const [view, setView] = useState<View>("dashboard");
   const [role, setRole] = useState<Role | null>(null);
   const [profileName, setProfileName] = useState("");
+  const [linkedProfiles, setLinkedProfiles] = useState<Awaited<ReturnType<typeof getMyAccess>>["linkedProfiles"]>([]);
+  const [switchingProfile, setSwitchingProfile] = useState(false);
+  const changeProfile = useServerFn(switchProfile);
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
@@ -317,6 +321,7 @@ function DabliuApp() {
     const nextRole = access.role ? roleLabels[access.role] ?? null : null;
     setRole(nextRole);
     setProfileName(access.profile?.full_name ?? "");
+    setLinkedProfiles(access.linkedProfiles);
     setProfileEmail(access.profile?.email ?? "");
     setProfilePhone(access.profile?.phone ?? "");
     setCurrentUserId(access.profile?.user_id ?? "");
@@ -517,8 +522,10 @@ function DabliuApp() {
         </div>
       </div>
     );
-  if (accessPending) return <PendingAccess name={profileName} onExit={signOut} />;
-  if (!role) return <PendingAccess name={profileName} onExit={signOut} />;
+  if (accessPending || !role) return <PendingAccess name={profileName} onExit={signOut} profiles={linkedProfiles} onSelect={async (profileId) => {
+    try { await changeProfile({ data: { profileId } }); window.location.reload(); }
+    catch { toast.error("Não foi possível trocar o perfil."); }
+  }} />;
   const canRegisterSale = !readOnly;
   const saleOwners = people.filter((person) => person.active && person.role !== null);
 
@@ -621,11 +628,27 @@ function DabliuApp() {
             </div>
             <h1>
               {view === "dashboard"
-                ? readOnly ? managementView?.target.full_name ?? "Carregando gestão..." : `Olá, ${profileName.split(" ")[0] || "Usuário"}${role ? ` · ${role}` : ""}`
+                ? readOnly ? managementView?.target.full_name ?? "Carregando gestão..." : `Olá, ${profileName || "Usuário"}${role ? ` · ${role}` : ""}`
                 : titleFor(view)}
             </h1>
           </div>
           <div className="header-actions">
+            {linkedProfiles.length > 1 && <label className="management-view-select">
+              <span>Meu perfil</span>
+              <select aria-label="Meu perfil" value={currentUserId} disabled={switchingProfile} onChange={async (event) => {
+                const profileId = event.target.value;
+                setSwitchingProfile(true);
+                try {
+                  await changeProfile({ data: { profileId } });
+                  window.location.reload();
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Não foi possível trocar o perfil.");
+                  setSwitchingProfile(false);
+                }
+              }}>
+                {linkedProfiles.map((p) => <option key={p.profile_id} value={p.profile_id} disabled={!p.active}>{p.role === "director" ? "Presidente/Diretor" : p.role === "master" ? "Master" : p.role === "representative" ? "Representante" : "Supervisor"}{p.management_name || p.company_name || p.team ? ` · ${p.management_name || p.company_name || p.team}` : ""}{!p.active ? " (Inativo)" : ""}</option>)}
+              </select>
+            </label>}
             {role === "Presidente/Diretor" && <label className="management-view-select">
               <span>Visualizar conta</span>
               <select aria-label="Visualizar conta" value={viewingId} onChange={(event) => {
@@ -897,7 +920,7 @@ function NavItem({
     </button>
   );
 }
-function PendingAccess({ name, onExit }: { name: string; onExit: () => Promise<void> }) {
+function PendingAccess({ name, onExit, profiles, onSelect }: { name: string; onExit: () => Promise<void>; profiles: Awaited<ReturnType<typeof getMyAccess>>["linkedProfiles"]; onSelect: (id: string) => Promise<void> }) {
   return (
     <main className="auth-page">
       <section className="auth-card pending-card">
@@ -913,9 +936,10 @@ function PendingAccess({ name, onExit }: { name: string; onExit: () => Promise<v
             : "Os dados da sua conta estão incompletos."}{" "}
           Entre em contato com Presidente/Diretor.
         </p>
-        <button className="outline-btn auth-submit" onClick={() => void onExit()}>
+        {profiles.filter((p) => p.active).map((p) => <Button key={p.profile_id} variant="outline" className="auth-submit" onClick={() => void onSelect(p.profile_id)}>Abrir {p.role === "director" ? "Presidente/Diretor" : p.role === "master" ? "Master" : p.role === "representative" ? "Representante" : "Supervisor"} · {p.management_name || p.company_name || p.team || p.full_name}</Button>)}
+        <Button variant="outline" className="outline-btn auth-submit" onClick={() => void onExit()}>
           Sair
-        </button>
+        </Button>
       </section>
     </main>
   );

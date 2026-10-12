@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveProfile } from "@/lib/active-profile.middleware";
 
 const saleSchema = z.object({
   sellerId: z.string().uuid(),
@@ -37,7 +38,7 @@ export const registerPushDevice = createServerFn({ method: "POST" })
   });
 
 export const createSaleAndNotify = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveProfile])
   .inputValidator((input) => saleSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -100,7 +101,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       minute: "2-digit",
       hour12: false,
     }).format(now);
-    const { data: sale, error } = await supabaseAdmin
+    const { data: sale, error } = await context.supabase
       .from("sales")
       .insert({
         seller: owner.full_name,
@@ -129,6 +130,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
       .select()
       .single();
     if (error || !sale) throw new Error("Não foi possível registrar a venda.");
+    await supabaseAdmin.from("access_audit").insert({ actor_id: context.loginId, target_user_id: data.sellerId, action: "SALE_CREATED", details: { sale_id: sale.id, acting_profile: context.userId } });
 
     const lovableApiKey = process.env["LOVABLE_API_KEY"];
     const firebaseApiKey =
@@ -188,7 +190,7 @@ export const createSaleAndNotify = createServerFn({ method: "POST" })
   });
 
 export const cancelSale = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveProfile])
   .inputValidator((input) => cancelSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { data: sale, error } = await context.supabase
@@ -199,5 +201,7 @@ export const cancelSale = createServerFn({ method: "POST" })
       .select("id")
       .maybeSingle();
     if (error || !sale) throw new Error("Não foi possível cancelar esta venda.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("access_audit").insert({ actor_id: context.loginId, target_user_id: context.userId, action: "SALE_CANCELLED", details: { sale_id: sale.id, acting_profile: context.userId } });
     return { ok: true };
   });

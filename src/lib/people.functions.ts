@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveProfile as requireSupabaseAuth } from "@/lib/active-profile.middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { assertPersonDeletionAllowed, managedRoles } from "@/lib/people-permissions";
+import { assertCanLinkProfile } from "@/lib/linked-profile.rules";
 
 const roleSchema = z.enum([
   "director",
@@ -32,14 +33,17 @@ const validateRoleFields = (data: { role: AppRole; team: string; companyName: st
 };
 const personSchema = z.object({
   email: z.string().email().max(200),
-  password: z.string().min(10).max(72)
+   password: z.string().min(10).max(72)
     .regex(/[a-z]/, "A senha precisa ter letra minúscula.")
     .regex(/[A-Z]/, "A senha precisa ter letra maiúscula.")
     .regex(/[0-9]/, "A senha precisa ter número.")
-    .regex(/[^A-Za-z0-9]/, "A senha precisa ter símbolo."),
+    .regex(/[^A-Za-z0-9]/, "A senha precisa ter símbolo.").optional(),
+  loginProfileId: z.string().uuid().optional(),
   ...profileFields,
   companyLogoDataUrl: logoSchema,
-}).superRefine(validateRoleFields);
+}).superRefine(validateRoleFields).superRefine((data, ctx) => {
+  if (!data.loginProfileId && !data.password) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["password"], message: "Informe a senha inicial." });
+});
 const updateSchema = z.object({
   userId: z.string().uuid(),
   ...profileFields,
@@ -167,9 +171,24 @@ export const createPerson = createServerFn({ method: "POST" })
   .inputValidator((input) => personSchema.parse(input))
   .handler(async ({ data, context }) => {
     await assertCanManage(context, data.role);
+    if (data.loginProfileId) assertCanLinkProfile(await getActorRole(context), data.role);
     const managerId = await resolveManagerId(context, data.role, data.managerId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+    let loginId = "";
+    let userId = "";
+    if (data.loginProfileId) {
+      const { data: visible } = await context.supabase.from("profiles").select("user_id").eq("user_id", data.loginProfileId).maybeSingle();
+      if (!visible) throw new Error("A pessoa escolhida não foi encontrada.");
+      const { data: link } = await supabaseAdmin.from("login_profiles").select("login_id").eq("profile_id", data.loginProfileId).maybeSingle();
+      if (!link) throw new Error("O login dessa pessoa não foi encontrado.");
+      const { data: existing } = await supabaseAdmin.from("login_profiles").select("profile_id").eq("login_id", link.login_id);
+      const { data: duplicate } = await supabaseAdmin.from("user_roles").select("id").in("user_id", (existing ?? []).map((p) => p.profile_id)).eq("role", data.role);
+      if (duplicate?.length) throw new Error("Essa pessoa já tem um perfil com este cargo.");
+      loginId = link.login_id;
+      userId = crypto.randomUUID();
+    } else {
+      if (!data.password) throw new Error("Informe a senha inicial.");
+      const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
       email_confirm: true,
@@ -177,7 +196,16 @@ export const createPerson = createServerFn({ method: "POST" })
     });
     if (error || !created.user)
       throw new Error(error?.message ?? "Não foi possível criar o acesso.");
-    const userId = created.user.id;
+      userId = created.user.id;
+      loginId = userId;
+    }
+    const rollback = async () => {
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+      const { data: uploaded } = await supabaseAdmin.from("profiles").select("company_logo_path").eq("user_id", userId).maybeSingle();
+      if (uploaded?.company_logo_path) await supabaseAdmin.storage.from("company-logos").remove([uploaded.company_logo_path]);
+      await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
+      if (!data.loginProfileId) await supabaseAdmin.auth.admin.deleteUser(userId);
+    };
     const { error: profileError } = await supabaseAdmin.from("profiles").insert({
       user_id: userId,
       full_name: data.fullName,
@@ -194,7 +222,7 @@ export const createPerson = createServerFn({ method: "POST" })
       updated_by: context.userId,
     });
     if (profileError) {
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      await rollback();
       throw new Error("Não foi possível salvar o perfil.");
     }
     if (data.companyLogoDataUrl) {
@@ -206,7 +234,7 @@ export const createPerson = createServerFn({ method: "POST" })
         .from("company-logos")
         .upload(logoPath, bytes, { contentType: `image/${imageType}`, upsert: true });
       if (uploadError) {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
+        await rollback();
         throw new Error("Não foi possível salvar a logomarca.");
       }
       const { error: logoProfileError } = await supabaseAdmin
@@ -215,18 +243,21 @@ export const createPerson = createServerFn({ method: "POST" })
         .eq("user_id", userId);
       if (logoProfileError) {
         await supabaseAdmin.storage.from("company-logos").remove([logoPath]);
-        await supabaseAdmin.auth.admin.deleteUser(userId);
+        await rollback();
         throw new Error("Não foi possível vincular a logomarca.");
       }
     }
-    await supabaseAdmin
+    const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: userId, role: data.role, assigned_by: context.userId });
+    if (roleError) { await rollback(); throw new Error("Não foi possível definir o cargo."); }
+    const { error: linkError } = await supabaseAdmin.from("login_profiles").upsert({ login_id: loginId, profile_id: userId }, { onConflict: "profile_id", ignoreDuplicates: true });
+    if (linkError) { await supabaseAdmin.from("user_roles").delete().eq("user_id", userId); await rollback(); throw new Error("Não foi possível vincular o perfil ao login."); }
     await supabaseAdmin.from("access_audit").insert({
-      actor_id: context.userId,
+      actor_id: context.loginId,
       target_user_id: userId,
       action: "USER_CREATED",
-      details: { role: data.role },
+      details: { role: data.role, acting_profile: context.userId },
     });
     return { ok: true };
   });
@@ -296,14 +327,13 @@ export const updatePerson = createServerFn({ method: "POST" })
         await supabaseAdmin.storage.from("company-logos").remove([currentProfile.company_logo_path]);
       await supabaseAdmin.from("profiles").update({ company_logo_path: logoPath }).eq("user_id", data.userId);
     }
-    if (!data.active)
-      await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "876000h" });
-    else await supabaseAdmin.auth.admin.updateUserById(data.userId, { ban_duration: "none" });
+    // Profile activation is enforced by RLS and the active-profile middleware;
+    // do not ban the shared login when just one business profile is disabled.
     await supabaseAdmin.from("access_audit").insert({
-      actor_id: context.userId,
+      actor_id: context.loginId,
       target_user_id: data.userId,
       action: "USER_UPDATED",
-      details: { role: data.role, active: data.active },
+      details: { role: data.role, active: data.active, acting_profile: context.userId },
     });
     return { ok: true };
   });
@@ -331,8 +361,15 @@ export const deletePerson = createServerFn({ method: "POST" })
       .select("user_id", { count: "exact", head: true }).eq("manager_id", target.user_id);
     if (childrenError) throw new Error("Não foi possível conferir os vínculos desta pessoa.");
     assertPersonDeletionAllowed({ ...permission, hasSubordinates: (count ?? 0) > 0 });
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(target.user_id);
-    if (authError) throw new Error("Não foi possível apagar este acesso.");
+    const { data: ownLink } = await supabaseAdmin.from("login_profiles").select("login_id").eq("profile_id", target.user_id).maybeSingle();
+    if (ownLink && ownLink.login_id !== target.user_id && actorRole !== "director") throw new Error("Apenas Presidente/Diretor pode remover um perfil vinculado.");
+    const { count: profileCount } = ownLink ? await supabaseAdmin.from("login_profiles").select("profile_id", { count: "exact", head: true }).eq("login_id", ownLink.login_id) : { count: 0 };
+    if (target.user_id === ownLink?.login_id && (profileCount ?? 0) > 1) throw new Error("Remova os perfis adicionais antes de apagar o acesso principal.");
+    if (ownLink?.login_id === context.loginId && (profileCount ?? 0) <= 1) throw new Error("Você não pode apagar seu único acesso.");
+    if (target.user_id === ownLink?.login_id || !ownLink) {
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(target.user_id);
+      if (authError) throw new Error("Não foi possível apagar este acesso.");
+    }
     const cleanup = await Promise.all([
       supabaseAdmin.from("profiles").delete().eq("user_id", target.user_id),
       supabaseAdmin.from("user_roles").delete().eq("user_id", target.user_id),
@@ -345,8 +382,8 @@ export const deletePerson = createServerFn({ method: "POST" })
       if (error) console.error("Could not remove deleted person's company logo", error.message);
     }
     const { error: auditError } = await supabaseAdmin.from("access_audit").insert({
-      actor_id: context.userId, target_user_id: target.user_id,
-      action: "USER_DELETED", details: { role: permission.targetRole, full_name: target.full_name },
+      actor_id: context.loginId, target_user_id: target.user_id,
+      action: "USER_DELETED", details: { role: permission.targetRole, full_name: target.full_name, acting_profile: context.userId },
     });
     if (auditError) console.error("Could not audit person deletion", auditError.message);
     return { ok: true };

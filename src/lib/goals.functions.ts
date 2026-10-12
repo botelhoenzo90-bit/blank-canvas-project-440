@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveProfile as requireSupabaseAuth } from "@/lib/active-profile.middleware";
 import type { Database } from "@/integrations/supabase/types";
 
 const goalSchema = z.object({

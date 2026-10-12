@@ -70,5 +70,5 @@
 - [x] Mostrar todas as vendas e destaques ao vivo na TV para toda a gestão, sem ampliar notificações
 - [x] Permitir ao Diretor visualizar uma conta e sua estrutura sem trocar o login
 - [x] Corrigir textos cortados no topo
-- [ ] Exibir o nome completo na saudação da Visão Geral
-- [ ] Permitir um único login com perfis de cargos vinculados e troca rápida segura
+- [x] Exibir o nome completo na saudação da Visão Geral
+- [x] Permitir um único login com perfis de cargos vinculados e troca rápida segura

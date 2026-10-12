@@ -309,6 +309,7 @@ button {
   gap: 8px;
   flex-wrap: wrap;
 }
+.header-heading h1 { word-break: normal; overflow-wrap: anywhere; }
 .contact-cell {
   display: block;
   color: var(--ink);

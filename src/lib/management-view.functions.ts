@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveProfile as requireSupabaseAuth } from "@/lib/active-profile.middleware";
 import { assertDirectorView, structureIds } from "@/lib/view-scope";
 import type { Database } from "@/integrations/supabase/types";
 
