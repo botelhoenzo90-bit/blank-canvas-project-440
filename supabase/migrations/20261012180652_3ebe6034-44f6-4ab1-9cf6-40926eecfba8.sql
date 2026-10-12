@@ -1,0 +1,10 @@
+ALTER FUNCTION public.active_profile_id() SET SCHEMA private;
+ALTER FUNCTION public.switch_my_profile(uuid) SET SCHEMA private;
+ALTER FUNCTION public.my_linked_profiles() SET SCHEMA private;
+CREATE FUNCTION public.active_profile_id() RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public AS $$ SELECT private.active_profile_id() $$;
+CREATE FUNCTION public.switch_my_profile(target_profile uuid) RETURNS uuid LANGUAGE sql SECURITY INVOKER SET search_path=public AS $$ SELECT private.switch_my_profile(target_profile) $$;
+CREATE FUNCTION public.my_linked_profiles() RETURNS TABLE(profile_id uuid,full_name text,role public.app_role,management_name text,company_name text,team text,active boolean) LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public AS $$ SELECT * FROM private.my_linked_profiles() $$;
+REVOKE ALL ON FUNCTION public.active_profile_id(),public.switch_my_profile(uuid),public.my_linked_profiles() FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.active_profile_id(),public.switch_my_profile(uuid),public.my_linked_profiles() TO authenticated;
+GRANT USAGE ON SCHEMA private TO authenticated;
+GRANT EXECUTE ON FUNCTION private.active_profile_id(),private.switch_my_profile(uuid),private.my_linked_profiles() TO authenticated;
