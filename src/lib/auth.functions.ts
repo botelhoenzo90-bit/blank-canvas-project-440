@@ -69,6 +69,13 @@ export const createAccount = createServerFn({ method: "POST" })
       await supabaseAdmin.auth.admin.deleteUser(userId);
       return { ok: false as const, reason: "role_failed" as const };
     }
+    const { error: linkError } = await supabaseAdmin.from("login_profiles").insert({ login_id: userId, profile_id: userId });
+    if (linkError) {
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+      await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return { ok: false as const, reason: "profile_failed" as const };
+    }
     return { ok: true as const };
   });
 
