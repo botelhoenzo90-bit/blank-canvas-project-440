@@ -63,6 +63,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
   const [people, setPeople] = useState<Person[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Person | null>(null);
+  const [linking, setLinking] = useState<Person | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>(allowedRoles[role][0] ?? "supervisor");
   const [selectedManagerId, setSelectedManagerId] = useState("");
   const [removeLogo, setRemoveLogo] = useState(false);
@@ -73,6 +74,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
   }, []);
   const openCreate = () => {
     setEditing(null);
+    setLinking(null);
     setSelectedRole(choices[0] ?? "supervisor");
     setSelectedManagerId("");
     setRemoveLogo(false);
@@ -81,6 +83,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
   const openEdit = (person: Person) => {
     if (!person.role) return;
     setEditing(person);
+    setLinking(null);
     setSelectedRole(person.role);
     setSelectedManagerId(person.manager_id ?? "");
     setRemoveLogo(false);
@@ -89,6 +92,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
   const closeModal = () => {
     setOpen(false);
     setEditing(null);
+    setLinking(null);
     setSelectedManagerId("");
     setRemoveLogo(false);
   };
@@ -117,11 +121,11 @@ export function PeoplePanel({ role }: { role: AppRole }) {
       } else {
         await create({ data: {
           email: String(fd.get("email")),
-          password: String(fd.get("password")),
+           ...(linking ? { loginProfileId: linking.user_id } : { password: String(fd.get("password")) }),
           ...shared,
           companyLogoDataUrl,
         } });
-        toast.success("Acesso criado com sucesso");
+        toast.success(linking ? "Perfil vinculado ao mesmo login" : "Acesso criado com sucesso");
       }
       closeModal();
       await refresh();
@@ -229,17 +233,20 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                   </span>
                 </td>
                 <td>
-                  {p.role && choices.includes(p.role) && (
+                  {p.role && (choices.includes(p.role) || role === "director") && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="people-menu-trigger" disabled={deletingId !== null} aria-label={`Opções de ${p.full_name}`}><MoreHorizontal /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="people-menu-content">
-                        <DropdownMenuItem onSelect={() => openEdit(p)}><Pencil /> Editar perfil</DropdownMenuItem>
+                         {role === "director" && <DropdownMenuItem onSelect={() => {
+                           setEditing(null); setLinking(p); setSelectedRole(p.role === "master" ? "representative" : "master"); setSelectedManagerId(""); setRemoveLogo(false); setOpen(true);
+                         }}><UserPlus /> Adicionar perfil vinculado</DropdownMenuItem>}
+                         {choices.includes(p.role) && <DropdownMenuItem onSelect={() => openEdit(p)}><Pencil /> Editar perfil</DropdownMenuItem>}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className={p.active ? "people-menu-danger" : ""} onSelect={() => void toggle(p)}><Power /> {p.active ? "Desativar acesso" : "Ativar acesso"}</DropdownMenuItem>
+                         {choices.includes(p.role) && <DropdownMenuItem className={p.active ? "people-menu-danger" : ""} onSelect={() => void toggle(p)}><Power /> {p.active ? "Desativar acesso" : "Ativar acesso"}</DropdownMenuItem>}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="people-menu-danger" onSelect={() => void erase(p)}><Trash2 /> Apagar pessoa</DropdownMenuItem>
+                         {choices.includes(p.role) && <DropdownMenuItem className="people-menu-danger" onSelect={() => void erase(p)}><Trash2 /> Apagar pessoa / perfil</DropdownMenuItem>}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
@@ -255,7 +262,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
             <div className="modal-head">
               <div>
                 <span className="panel-kicker">{editing ? "EDITAR PERFIL" : "NOVO ACESSO"}</span>
-                <h3>{editing ? editing.full_name : "Adicionar pessoa"}</h3>
+                 <h3>{editing ? editing.full_name : linking ? `Novo perfil · ${linking.full_name}` : "Adicionar pessoa"}</h3>
               </div>
               <Button variant="ghost" size="icon" type="button" onClick={closeModal}>
                 <X />
@@ -264,18 +271,18 @@ export function PeoplePanel({ role }: { role: AppRole }) {
             <div className="form-grid">
               <label>
                 Nome
-                <input name="fullName" required minLength={3} defaultValue={editing?.full_name} />
+                 <input name="fullName" required minLength={3} defaultValue={editing?.full_name ?? linking?.full_name} />
               </label>
               <label>
                 Telefone
-                <input name="phone" type="tel" required minLength={10} maxLength={20} defaultValue={editing?.phone} />
+                 <input name="phone" type="tel" required minLength={10} maxLength={20} defaultValue={editing?.phone ?? linking?.phone} />
               </label>
               {!editing && <label>
                 E-mail
-                <input name="email" type="email" required />
+                 <input name="email" type="email" required defaultValue={linking?.email} readOnly={Boolean(linking)} />
               </label>}
               {editing && <label>E-mail<input value={editing.email} disabled /></label>}
-              {!editing && <label>
+               {!editing && !linking && <label>
                 Senha inicial
                 <input
                   name="password"
@@ -339,7 +346,7 @@ export function PeoplePanel({ role }: { role: AppRole }) {
                 Cancelar
               </Button>
               <Button className="primary-btn" disabled={busy}>
-                {busy ? "Salvando..." : editing ? "Salvar alterações" : "Criar acesso"}
+                 {busy ? "Salvando..." : editing ? "Salvar alterações" : linking ? "Vincular perfil" : "Criar acesso"}
               </Button>
             </div>
           </form>
