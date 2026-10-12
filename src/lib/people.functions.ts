@@ -362,6 +362,7 @@ export const deletePerson = createServerFn({ method: "POST" })
     if (childrenError) throw new Error("Não foi possível conferir os vínculos desta pessoa.");
     assertPersonDeletionAllowed({ ...permission, hasSubordinates: (count ?? 0) > 0 });
     const { data: ownLink } = await supabaseAdmin.from("login_profiles").select("login_id").eq("profile_id", target.user_id).maybeSingle();
+    if (ownLink && ownLink.login_id !== target.user_id && actorRole !== "director") throw new Error("Apenas Presidente/Diretor pode remover um perfil vinculado.");
     const { count: profileCount } = ownLink ? await supabaseAdmin.from("login_profiles").select("profile_id", { count: "exact", head: true }).eq("login_id", ownLink.login_id) : { count: 0 };
     if (target.user_id === ownLink?.login_id && (profileCount ?? 0) > 1) throw new Error("Remova os perfis adicionais antes de apagar o acesso principal.");
     if (ownLink?.login_id === context.loginId && (profileCount ?? 0) <= 1) throw new Error("Você não pode apagar seu único acesso.");

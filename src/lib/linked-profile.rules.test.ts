@@ -18,6 +18,11 @@ describe("Perfis vinculados", () => {
     doesNotThrow(() => assertLinkedProfileSelection("master", profiles));
     doesNotThrow(() => assertLinkedProfileSelection("rep", profiles));
   });
+  it("um login alterna entre Diretor e Master", () => {
+    const profiles = [{ profile_id: "director", active: true }, { profile_id: "master", active: true }];
+    doesNotThrow(() => assertLinkedProfileSelection("director", profiles));
+    doesNotThrow(() => assertLinkedProfileSelection("master", profiles));
+  });
   it("bloqueia perfil de outra pessoa ou inativo", () => {
     const profiles = [{ profile_id: "disabled", active: false }];
     throws(() => assertLinkedProfileSelection("someone-else", profiles));
