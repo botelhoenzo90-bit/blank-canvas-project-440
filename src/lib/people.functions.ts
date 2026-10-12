@@ -200,6 +200,9 @@ export const createPerson = createServerFn({ method: "POST" })
       loginId = userId;
     }
     const rollback = async () => {
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+      const { data: uploaded } = await supabaseAdmin.from("profiles").select("company_logo_path").eq("user_id", userId).maybeSingle();
+      if (uploaded?.company_logo_path) await supabaseAdmin.storage.from("company-logos").remove([uploaded.company_logo_path]);
       await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
       if (!data.loginProfileId) await supabaseAdmin.auth.admin.deleteUser(userId);
     };

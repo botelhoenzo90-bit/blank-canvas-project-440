@@ -522,8 +522,10 @@ function DabliuApp() {
         </div>
       </div>
     );
-  if (accessPending) return <PendingAccess name={profileName} onExit={signOut} />;
-  if (!role) return <PendingAccess name={profileName} onExit={signOut} />;
+  if (accessPending || !role) return <PendingAccess name={profileName} onExit={signOut} profiles={linkedProfiles} onSelect={async (profileId) => {
+    try { await changeProfile({ data: { profileId } }); window.location.reload(); }
+    catch { toast.error("Não foi possível trocar o perfil."); }
+  }} />;
   const canRegisterSale = !readOnly;
   const saleOwners = people.filter((person) => person.active && person.role !== null);
 
@@ -918,7 +920,7 @@ function NavItem({
     </button>
   );
 }
-function PendingAccess({ name, onExit }: { name: string; onExit: () => Promise<void> }) {
+function PendingAccess({ name, onExit, profiles, onSelect }: { name: string; onExit: () => Promise<void>; profiles: Awaited<ReturnType<typeof getMyAccess>>["linkedProfiles"]; onSelect: (id: string) => Promise<void> }) {
   return (
     <main className="auth-page">
       <section className="auth-card pending-card">
@@ -934,9 +936,10 @@ function PendingAccess({ name, onExit }: { name: string; onExit: () => Promise<v
             : "Os dados da sua conta estão incompletos."}{" "}
           Entre em contato com Presidente/Diretor.
         </p>
-        <button className="outline-btn auth-submit" onClick={() => void onExit()}>
+        {profiles.filter((p) => p.active).map((p) => <Button key={p.profile_id} variant="outline" className="auth-submit" onClick={() => void onSelect(p.profile_id)}>Abrir {p.role === "director" ? "Presidente/Diretor" : p.role === "master" ? "Master" : p.role === "representative" ? "Representante" : "Supervisor"} · {p.management_name || p.company_name || p.team || p.full_name}</Button>)}
+        <Button variant="outline" className="outline-btn auth-submit" onClick={() => void onExit()}>
           Sair
-        </button>
+        </Button>
       </section>
     </main>
   );
