@@ -115,6 +115,67 @@ export type Database = {
           },
         ]
       }
+      login_profiles: {
+        Row: {
+          created_at: string
+          login_id: string
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          login_id: string
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          login_id?: string
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "login_profiles_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      profile_sessions: {
+        Row: {
+          created_at: string
+          login_id: string
+          profile_id: string
+          session_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          login_id: string
+          profile_id: string
+          session_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          login_id?: string
+          profile_id?: string
+          session_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_sessions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           active: boolean
@@ -350,6 +411,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      active_profile_id: { Args: never; Returns: string }
+      my_linked_profiles: {
+        Args: never
+        Returns: {
+          active: boolean
+          company_name: string
+          full_name: string
+          management_name: string
+          profile_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          team: string
+        }[]
+      }
+      switch_my_profile: { Args: { target_profile: string }; Returns: string }
       tv_branding_profiles: {
         Args: never
         Returns: {
