@@ -1,0 +1,4 @@
+INSERT INTO public.login_profiles(login_id,profile_id) SELECT p.user_id,p.user_id FROM public.profiles p WHERE EXISTS(SELECT 1 FROM auth.users u WHERE u.id=p.user_id) ON CONFLICT(profile_id) DO NOTHING;
+CREATE FUNCTION public.link_primary_login_profile() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ BEGIN IF EXISTS(SELECT 1 FROM auth.users WHERE id=NEW.user_id) THEN INSERT INTO public.login_profiles(login_id,profile_id) VALUES(NEW.user_id,NEW.user_id) ON CONFLICT(profile_id) DO NOTHING; END IF; RETURN NEW; END $$;
+REVOKE ALL ON FUNCTION public.link_primary_login_profile() FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER link_primary_login_profile AFTER INSERT ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.link_primary_login_profile();
