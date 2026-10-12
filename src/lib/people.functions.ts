@@ -251,7 +251,7 @@ export const createPerson = createServerFn({ method: "POST" })
       .from("user_roles")
       .insert({ user_id: userId, role: data.role, assigned_by: context.userId });
     if (roleError) { await rollback(); throw new Error("Não foi possível definir o cargo."); }
-    const { error: linkError } = await supabaseAdmin.from("login_profiles").insert({ login_id: loginId, profile_id: userId });
+    const { error: linkError } = await supabaseAdmin.from("login_profiles").upsert({ login_id: loginId, profile_id: userId }, { onConflict: "profile_id", ignoreDuplicates: true });
     if (linkError) { await supabaseAdmin.from("user_roles").delete().eq("user_id", userId); await rollback(); throw new Error("Não foi possível vincular o perfil ao login."); }
     await supabaseAdmin.from("access_audit").insert({
       actor_id: context.loginId,
