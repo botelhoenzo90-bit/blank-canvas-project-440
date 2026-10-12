@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { setResponseHeader } from "@tanstack/react-start/server";
 
 const signupSchema = z.object({
   fullName: z.string().trim().min(3).max(120),
@@ -74,16 +75,23 @@ export const createAccount = createServerFn({ method: "POST" })
 export const getMyAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    setResponseHeader("Cache-Control", "no-store");
+    const [{ data: activeId }, { data: linkedProfiles }] = await Promise.all([
+      context.supabase.rpc("active_profile_id"),
+      context.supabase.rpc("my_linked_profiles"),
+    ]);
+    const profileId = activeId ?? context.userId;
     const [{ data: profile }, { data: roleRow }] = await Promise.all([
-      context.supabase.from("profiles").select("*").eq("user_id", context.userId).maybeSingle(),
+      context.supabase.from("profiles").select("*").eq("user_id", profileId).maybeSingle(),
       context.supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", context.userId)
+        .eq("user_id", profileId)
         .maybeSingle(),
     ]);
     return {
       profile,
+      linkedProfiles: linkedProfiles ?? [],
       role: roleRow?.role ?? null,
       pending: Boolean(!profile || !profile.active || !roleRow),
     };
